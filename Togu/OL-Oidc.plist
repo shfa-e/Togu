@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+    <dict>
+        <key>issuer</key>
+        <string>https://testinggg.onelogin.com/oidc/2</string>
+
+        <key>clientId</key>
+        <string>756fd860-9b80-013e-76f3-007dc08c8961253178</string>
+
+        <key>redirectUri</key>
+        <string>com.shfa.Togu.oidc://callback</string>
+
+        <key>scopes</key>
+        <string>openid profile email</string>
+    </dict>
+</plist>

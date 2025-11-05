@@ -9,9 +9,15 @@ import SwiftUI
 
 @main
 struct ToguApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    @StateObject private var router = Router()
+    @StateObject private var auth = AuthViewModel()
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            RootRouter()
+                .environmentObject(router)
+                .environmentObject(auth)
         }
     }
 }
