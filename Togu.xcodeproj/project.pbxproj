@@ -314,6 +314,8 @@
 		1B96AE7B2EBBA94B003A3A66 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				AIRTABLE_BASE_ID = appGlcEhG9bz5Wyq4;
+				AIRTABLE_KEY = patvjBTrTUYl1qpf3.c5120002b5b97103cd430fa7d8281632718c1dc81d917d37769c4d5959f00427;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
@@ -324,7 +326,7 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = Togu/Info.plist;
+				INFOPLIST_FILE = Togu/Resources/Info.plist;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -360,6 +362,8 @@
 		1B96AE7C2EBBA94B003A3A66 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				AIRTABLE_BASE_ID = appGlcEhG9bz5Wyq4;
+				AIRTABLE_KEY = patvjBTrTUYl1qpf3.c5120002b5b97103cd430fa7d8281632718c1dc81d917d37769c4d5959f00427;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
@@ -370,7 +374,7 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = Togu/Info.plist;
+				INFOPLIST_FILE = Togu/Resources/Info.plist;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;

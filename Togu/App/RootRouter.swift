@@ -31,7 +31,7 @@ struct RootRouter: View {
         ZStack {
             switch router.route {
             case .onboarding:
-                OnboardingView()
+                LoginView()
                     .transition(.opacity.combined(with: .scale))
             case .signingIn:
                 ProgressView("Signing in…")

@@ -12,5 +12,11 @@
             </array>
           </dict>
         </array>
+        <key>AIRTABLE_KEY</key>
+        <string>$(AIRTABLE_KEY)</string>
+        <key>AIRTABLE_BASE_ID</key>
+        <string>$(AIRTABLE_BASE_ID)</string>
+        <key>AIRTABLE_TABLE_QUESTIONS</key>
+        <string>Questions</string>
     </dict>
 </plist>

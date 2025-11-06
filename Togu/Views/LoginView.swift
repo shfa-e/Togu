@@ -1,5 +1,5 @@
 //
-//  OnboardingView.swift
+//  LoginView.swift
 //  Togu
 //
 //  Created by Whyyy on 05/11/2025.
@@ -8,7 +8,7 @@
 
 import SwiftUI
 
-struct OnboardingView: View {
+struct LoginView: View {
     @EnvironmentObject var auth: AuthViewModel
     @EnvironmentObject var router: Router
 
