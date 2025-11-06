@@ -42,25 +42,48 @@ struct UserFields: Codable {
 
 // 2. Questions
 struct QuestionFields: Codable {
-    var QuestionID: Int?
-    var Title: String?
-    var Body: String?
-    var Tags: [String]?
-    var Image: [ATAttachment]?
-    var Author: [String]?
-    var Upvotes: Int?
-    var Answers: [String]?
-    var CreatedDate: String?
+    let questionID: String?
+    let title: String?
+    let body: String?
+    let tags: [String]?
+    let image: [ATAttachment]?
+    let author: [String]?
+    let authorName: [String]?
+    let upvotes: Int?
+    let createdDate: String?
+
+    enum CodingKeys: String, CodingKey {
+        case questionID = "Question ID"
+        case title = "Title"
+        case body = "Body"
+        case tags = "Tags"
+        case image = "Image"
+        case author = "Author"
+        case authorName = "Author Name"
+        case upvotes = "Upvotes"
+        case createdDate = "Created Date"
+    }
 }
 
 // 3. Answers
 struct AnswerFields: Codable {
-    var AnswerID: Int?
-    var AnswerText: String?
-    var Question: [String]?
-    var Author: [String]?
-    var Upvotes: Int?
-    var CreatedDate: String?
+    let AnswerID: String?
+    let AnswerText: String?
+    let Question: [String]?
+    let Author: [String]?
+    let AuthorName: [String]?
+    let Upvotes: Int?
+    let CreatedDate: String?
+
+    enum CodingKeys: String, CodingKey {
+        case AnswerID = "Answer ID"
+        case AnswerText = "Answer Text"
+        case Question
+        case Author
+        case AuthorName = "Author Name"
+        case Upvotes
+        case CreatedDate = "Created Date"
+    }
 }
 
 // 4. Votes
@@ -80,4 +103,90 @@ struct BadgeFields: Codable {
     var Icon: [ATAttachment]?
     var EarnedBy: [String]?
     var DateEarned: String?
+}
+
+struct AirtableAttachment: Codable {
+    var url: String?
+}
+
+
+// MARK: - Field Mappers
+extension QuestionFields {
+    func toQuestion(fallbackId: String, createdTime: String) -> Question {
+            let created = parseAirtableDate(createdDate) ?? parseAirtableDate(createdTime) ?? Date()
+
+            let imageURLString = image?.first?.url
+            let url = imageURLString.flatMap { URL(string: $0) }
+
+            // Prefer Author Name lookup field
+            let authorDisplay = (authorName?.first).flatMap { !$0.isEmpty ? $0 : nil } ??
+                                (author?.first).flatMap { !$0.isEmpty ? $0 : nil } ??
+                                "Unknown"
+
+        return Question(
+            id: fallbackId,
+            title: title ?? "(No title)",
+            text: body ?? "",
+            tags: tags ?? [],
+            imageURL: url,
+            author: authorDisplay,
+            upvotes: upvotes ?? 0,
+            createdAt: created
+        )
+    }
+
+    private static func parseDate(_ str: String?) -> Date? {
+        guard let str else { return nil }
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f.date(from: str) ?? ISO8601DateFormatter().date(from: str)
+    }
+}
+
+
+extension AnswerFields {
+    // Converts raw Airtable fields into an app Answer model.
+    func toAnswer(recordId: String, questionRecordId: String, createdTime: String) -> Answer {
+        let createdDate = Self.parseDate(CreatedDate) ?? Self.parseDate(createdTime) ?? Date()
+        let authorName = (AuthorName?.first) ?? (Author?.first) ?? "Unknown"
+        let linkedQuestionId = Question?.first ?? questionRecordId
+
+        return Answer(
+            id: recordId,
+            text: AnswerText ?? "",
+            author: authorName,
+            upvotes: Upvotes ?? 0,
+            createdAt: createdDate,
+            questionId: questionRecordId
+        )
+    }
+
+    private static func parseDate(_ str: String?) -> Date? {
+        guard let str = str else { return nil }
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f.date(from: str) ?? ISO8601DateFormatter().date(from: str)
+    }
+}
+
+
+func parseAirtableDate(_ str: String?) -> Date? {
+    guard let s = str, !s.isEmpty else { return nil }
+
+    // Try ISO8601 (Airtable API & “Created time”)
+    let iso = ISO8601DateFormatter()
+    iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    if let d = iso.date(from: s) { return d }
+    if let d = ISO8601DateFormatter().date(from: s) { return d }
+
+    // Fallbacks if your column is a plain Date (not Created time)
+    let df = DateFormatter()
+    df.locale = .init(identifier: "en_US_POSIX")
+
+    df.dateFormat = "yyyy-MM-dd"
+    if let d = df.date(from: s) { return d }
+    df.dateFormat = "MM/dd/yyyy"
+    if let d = df.date(from: s) { return d }
+
+    return nil
 }

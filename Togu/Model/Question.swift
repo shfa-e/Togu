@@ -8,17 +8,17 @@
 import Foundation
 
 struct Question: Identifiable, Hashable {
-	let id: UUID
+	let id: String
 	let title: String
 	let text: String
-	let tags: [String]
 	let imageURL: URL?
 	let author: String
 	let upvotes: Int
 	let createdAt: Date
+    let tags: [String]
 
 	init(
-		id: UUID = UUID(),
+		id: String,
 		title: String,
 		text: String,
 		tags: [String] = [],
@@ -38,4 +38,12 @@ struct Question: Identifiable, Hashable {
 	}
 }
 
+extension Question {
+    var formattedDate: String {
+        let f = DateFormatter()
+        f.dateStyle = .medium
+        f.timeStyle = .none
+        return f.string(from: createdAt)
+    }
+}
 

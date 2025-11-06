@@ -14,14 +14,19 @@ final class FeedViewModel: ObservableObject {
 	@Published var errorMessage: String? = nil
 	@Published var questions: [Question] = []
 
-	private lazy var airtable = AirtableService()
+	private lazy var airtable: AirtableService? = {
+	    guard let config = AirtableConfig() else {
+	        return nil
+	    }
+	    return AirtableService(config: config)
+	}()
 
 	func loadQuestions() {
 		isLoading = true
 		errorMessage = nil
 
 		Task {
-			guard let airtable else {
+			guard let airtable = self.airtable else {
 				self.errorMessage = "Airtable not configured. Check Info.plist keys."
 				self.isLoading = false
 				return
@@ -37,5 +42,4 @@ final class FeedViewModel: ObservableObject {
 		}
 	}
 }
-
 

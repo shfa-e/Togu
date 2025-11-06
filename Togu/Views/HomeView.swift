@@ -19,44 +19,62 @@ struct HomeView: View {
     var body: some View {
 
 		NavigationStack {
-			Group {
-				if feed.isLoading {
-					VStack(spacing: 12) {
-						ProgressView()
-						Text("Loading questions…")
-							.foregroundStyle(.secondary)
-					}
-					.frame(maxWidth: .infinity, maxHeight: .infinity)
-				} else if let error = feed.errorMessage {
-					VStack(spacing: 12) {
-						Image(systemName: "exclamationmark.triangle")
-							.font(.largeTitle)
-							.foregroundStyle(.orange)
-						Text(error)
-							.multilineTextAlignment(.center)
-						Button("Retry") { feed.loadQuestions() }
-					}
-					.padding()
-					.frame(maxWidth: .infinity, maxHeight: .infinity)
-				} else if feed.questions.isEmpty {
-					ContentUnavailableView(
-						"No questions yet",
-                        systemImage: "text.bubble", description: Text("Be the first to ask a question!")
-					)
-					.toolbar { signOutToolbar }
-				} else {
-					List {
+			List {
+				Section {
+					if feed.isLoading {
+						ZStack {
+							Color.clear
+							VStack(spacing: 12) {
+								ProgressView()
+								Text("Loading questions…")
+									.foregroundStyle(.secondary)
+							}
+							.frame(maxWidth: .infinity, maxHeight: .infinity)
+						}
+						.listRowInsets(.none)
+					} else if let error = feed.errorMessage {
+						ZStack {
+							Color.clear
+							VStack(spacing: 12) {
+								Image(systemName: "exclamationmark.triangle")
+									.font(.largeTitle)
+									.foregroundStyle(.orange)
+								Text(error)
+									.multilineTextAlignment(.center)
+								Button("Retry") { feed.loadQuestions() }
+							}
+							.padding()
+							.frame(maxWidth: .infinity, maxHeight: .infinity)
+						}
+						.listRowInsets(.none)
+					} else if feed.questions.isEmpty {
+						ZStack {
+							Color.clear
+							ContentUnavailableView(
+								"No questions yet",
+								systemImage: "text.bubble", description: Text("Be the first to ask a question!")
+							)
+						}
+						.listRowInsets(.none)
+					} else {
 						ForEach(feed.questions) { question in
-							QuestionRow(question: question)
+							NavigationLink(
+								destination: QuestionDetailView(
+									question: question,
+                                    airtable: AirtableService(config: AirtableConfig()!)
+								)
+							) {
+								QuestionRow(question: question)
+							}
 						}
 					}
-					.listStyle(.plain)
-					.refreshable { feed.loadQuestions() }
-					.toolbar { signOutToolbar }
 				}
 			}
+			.listStyle(.plain)
+			.refreshable { feed.loadQuestions() }
 			.navigationTitle("Home")
 			.onAppear { feed.loadQuestions() }
+			.toolbar { signOutToolbar }
 		}
     }
 
@@ -114,7 +132,7 @@ private struct QuestionRow: View {
 				Text(question.title)
 					.font(.headline)
 				Spacer()
-				Label("\(question.upvotes)", systemImage: "hand.thumbsup.fill")
+				Label("\(question.upvotes)", systemImage: "arrow.up.circle.fill")
 					.font(.subheadline)
 					.foregroundStyle(.secondary)
 			}

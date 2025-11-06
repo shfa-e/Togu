@@ -7,105 +7,132 @@
 
 import Foundation
 
-struct AirtableConfig {
-	let apiKey: String
-	let baseId: String
-	let questionsTable: String
-
-	init?() {
-		let info = Bundle.main.infoDictionary ?? [:]
-		guard let apiKey = info["AIRTABLE_KEY"] as? String, !apiKey.isEmpty,
-				let baseId = info["AIRTABLE_BASE_ID"] as? String, !baseId.isEmpty else {
-			return nil
-		}
-		self.apiKey = apiKey
-		self.baseId = baseId
-		self.questionsTable = (info["AIRTABLE_TABLE_QUESTIONS"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false ? (info["AIRTABLE_TABLE_QUESTIONS"] as! String) : "Questions"
-	}
-}
-
 final class AirtableService {
-	private let config: AirtableConfig
-	private let urlSession: URLSession
+    private let config: AirtableConfig
+    private let urlSession: URLSession
 
-	init?(urlSession: URLSession = .shared) {
-		guard let config = AirtableConfig() else { return nil }
-		self.config = config
-		self.urlSession = urlSession
-	}
-
-	// MARK: - Public API
-	func fetchQuestions() async throws -> [Question] {
-		let url = try makeListURL(tableName: config.questionsTable)
-		var request = URLRequest(url: url)
-		request.httpMethod = "GET"
-		request.setValue("Bearer \(config.apiKey)", forHTTPHeaderField: "Authorization")
-		request.setValue("application/json", forHTTPHeaderField: "Accept")
-
-		let (data, response) = try await urlSession.data(for: request)
-		guard let http = response as? HTTPURLResponse, 200..<300 ~= http.statusCode else {
-			throw ServiceError.http
-		}
-
-		let decoded = try JSONDecoder().decode(AirtableListResponse<QuestionFields>.self, from: data)
-		let questions: [Question] = decoded.records.compactMap { record in
-			guard let fields = record.fields else { return nil }
-			return fields.toQuestion(fallbackId: record.id, createdTime: record.createdTime)
-		}
-		// Sort newest first using createdAt
-		return questions.sorted(by: { $0.createdAt > $1.createdAt })
-	}
-
-	// MARK: - Helpers
-	private func makeListURL(tableName: String) throws -> URL {
-		var components = URLComponents()
-		components.scheme = "https"
-		components.host = "api.airtable.com"
-		components.path = "/v0/\(config.baseId)/\(tableName)"
-		components.queryItems = [
-			URLQueryItem(name: "pageSize", value: "50")
-		]
-		guard let url = components.url else { throw ServiceError.url }
-		return url
-	}
-
-	enum ServiceError: Error { case url, http }
-}
-
-// MARK: - Airtable DTOs
-
-struct AirtableListResponse<F: Decodable>: Decodable {
-	let records: [AirtableRecord<F>]
-}
-
-struct AirtableRecord<F: Decodable>: Decodable {
-	let id: String
-	let createdTime: String
-	let fields: F?
-}
-
-extension QuestionFields {
-    func toQuestion(fallbackId: String, createdTime: String) -> Question {
-        // Map Airtable schema fields to app model
-        let createdDate = Self.parseDate(CreatedDate) ?? Self.parseDate(createdTime) ?? Date()
-        let imageURLString = Image?.first?.url
-        let url = imageURLString.flatMap { URL(string: $0) }
-        let authorName = (Author?.first).map { $0 } ?? "Unknown"
-        return Question(
-            id: UUID(uuidString: String(QuestionID ?? 0)) ?? UUID(),
-            title: Title ?? "(No title)",
-            text: Body ?? "",
-            imageURL: url,
-            author: authorName,
-            upvotes: Upvotes ?? 0,
-            createdAt: createdDate
-        )
+    init(config: AirtableConfig, urlSession: URLSession = .shared) {
+        self.config = config
+        self.urlSession = urlSession
     }
 
-    private static func parseDate(_ str: String?) -> Date? {
-        guard let str else { return nil }
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f.date(from: str) ?? ISO8601DateFormatter().date(from: str)
+    // MARK: - Fetch Questions
+    func fetchQuestions() async throws -> [Question] {
+        let url = try makeListURL(tableName: config.questionsTable)
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(config.apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+
+        let (data, response) = try await urlSession.data(for: request)
+        guard let http = response as? HTTPURLResponse, 200..<300 ~= http.statusCode else {
+            throw ServiceError.http
+        }
+
+        let decoded = try JSONDecoder().decode(AirtableListResponse<QuestionFields>.self, from: data)
+
+        let questions: [Question] = decoded.records.map { record in
+            record.fields.toQuestion(
+                fallbackId: record.id ?? "",
+                createdTime: record.createdTime!
+            )
+        }.sorted { $0.createdAt > $1.createdAt }
+
+        // Sort newest first using createdAt
+        return questions.sorted(by: { $0.createdAt > $1.createdAt })
     }
+
+    // MARK: - Fetch Answers
+    func fetchAnswers(for question: Question) async throws -> [Answer] {
+        let baseURL = try makeListURL(tableName: "Answers")
+        var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)
+
+        // ✅ Correct filter formula — no manual encoding
+        let filter = "FIND('\(question.id)', {Question})"
+        components?.queryItems = [
+            URLQueryItem(name: "filterByFormula", value: filter)
+        ]
+
+        guard let finalURL = components?.url else { throw ServiceError.url }
+        print("🔍 Requesting Answers URL:", finalURL)
+
+        var request = URLRequest(url: finalURL)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(config.apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+
+        let (data, response) = try await urlSession.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw ServiceError.http }
+        if !(200..<300).contains(http.statusCode) {
+            print("❌ HTTP Error Status Code:", http.statusCode)
+            throw ServiceError.http
+        }
+
+        let decoded = try JSONDecoder().decode(AirtableListResponse<AnswerFields>.self, from: data)
+        print("✅ Loaded \(decoded.records.count) answers from Airtable")
+
+        let dateFormatter = ISO8601DateFormatter()
+
+        let answers: [Answer] = decoded.records.compactMap { record in
+            let fields = record.fields
+
+            return Answer(
+                id: record.id ?? UUID().uuidString,
+                text: fields.AnswerText ?? "(No answer text)",
+                author: fields.AuthorName?.first ?? "Anonymous",
+                upvotes: fields.Upvotes ?? 0,
+                createdAt: parseAirtableDate(fields.CreatedDate),
+                questionId: question.id
+            )
+        }
+
+        return answers.sorted(by: { $0.createdAt < $1.createdAt })
+    }
+    
+    
+    // MARK: - Helper: Parse Airtable date safely
+    private func parseAirtableDate(_ str: String?) -> Date {
+        guard let str = str else { return Date() }
+
+        // 1. Try ISO8601 (Airtable API format)
+        let isoFormatter = ISO8601DateFormatter()
+        isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = isoFormatter.date(from: str) {
+            return date
+        }
+
+        // 2. Try simple date (like "11/5/2025")
+        let df = DateFormatter()
+        df.dateFormat = "MM/dd/yyyy"
+        df.locale = Locale(identifier: "en_US_POSIX")
+        if let date = df.date(from: str) {
+            return date
+        }
+
+        // 3. Try "yyyy-MM-dd" fallback (some Airtable fields use this)
+        df.dateFormat = "yyyy-MM-dd"
+        if let date = df.date(from: str) {
+            return date
+        }
+
+        // Fallback: return current date
+        return Date()
+    }
+
+    
+    // MARK: - Helpers
+    private func makeListURL(tableName: String) throws -> URL {
+        var components = URLComponents()
+        components.scheme = "https"
+        components.host = "api.airtable.com"
+        components.path = "/v0/\(config.baseId)/\(tableName)"
+        components.queryItems = [URLQueryItem(name: "pageSize", value: "50")]
+
+        guard let url = components.url else { throw ServiceError.url }
+        return url
+    }
+
+    enum ServiceError: Error { case url, http }
+    
 }
+
