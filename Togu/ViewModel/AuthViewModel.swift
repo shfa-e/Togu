@@ -16,6 +16,7 @@ import AuthenticationServices
 final class AuthViewModel: ObservableObject {
     @Published var state: AuthState = .signedOut
     @Published var message: String = ""
+    @Published var airtableUserId: String? = nil
 
     private var olOidc: OLOidc?
 
@@ -83,6 +84,25 @@ final class AuthViewModel: ObservableObject {
             } else {
                 self.state = .signedIn(userInfo: [:])
                 self.message = "✅ Signed in (no claims returned)."
+            }
+        }
+        
+        // After setting `self.state = .signedIn(userInfo: claims)`:
+        Task { // NEW
+            guard let cfg = AirtableConfig() else { return }        // NEW
+            let airtable = AirtableService(config: cfg)             // NEW
+            if case .signedIn(let claims) = self.state {            // NEW
+                let name = (claims["name"] as? String)
+                        ?? (claims["given_name"] as? String)
+                        ?? "Unknown"
+                let email = (claims["email"] as? String) ?? ""      // NEW
+                if !email.isEmpty {
+                    let id = try? await airtable.createUserIfMissing(name: name, email: email) // NEW
+                    await MainActor.run { self.airtableUserId = id }                            // NEW
+                    print("✅ Airtable user id linked: \(self.airtableUserId ?? "nil")")        // NEW
+                } else {
+                    print("⚠️ Missing email in OneLogin claims — cannot sync Airtable user.")   // NEW
+                }
             }
         }
     }
@@ -195,4 +215,26 @@ final class AuthViewModel: ObservableObject {
         case .error: return 3
         }
     }
+    
+    // MARK: - Convenience accessors for OneLogin claims
+    var userEmail: String? {
+        if case .signedIn(let claims) = state {
+            return (claims["email"] as? String)
+                ?? (claims["upn"] as? String)
+                ?? (claims["preferred_username"] as? String)
+        }
+        return nil
+    }
+
+    var userDisplayName: String? {
+        if case .signedIn(let claims) = state {
+            return (claims["name"] as? String)
+                ?? (claims["given_name"] as? String)
+                ?? (claims["preferred_username"] as? String)
+                ?? userEmail
+        }
+        return nil
+    }                                                  
+    
+    
 }

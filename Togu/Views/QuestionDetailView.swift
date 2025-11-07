@@ -12,6 +12,8 @@ struct QuestionDetailView: View {
     let question: Question
     let airtable: AirtableService
     @StateObject private var vm: QuestionDetailViewModel
+    @State private var showAnswerForm = false
+    @EnvironmentObject var auth: AuthViewModel
     
     init(question: Question, airtable: AirtableService) {
         self.question = question
@@ -27,8 +29,21 @@ struct QuestionDetailView: View {
         .listStyle(.insetGrouped)
         .navigationTitle("Question")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    showAnswerForm = true
+                } label: {
+                    Label("Answer", systemImage: "text.bubble")
+                }
+            }
+        }
         .onAppear { vm.loadAnswers(for: question) }
         .refreshable { vm.loadAnswers(for: question) }
+        .sheet(isPresented: $showAnswerForm) {
+            AnswerFormView(question: question, vm: vm)
+                .environmentObject(auth)
+        }
     }
     
     private var sectionHeader: some View {

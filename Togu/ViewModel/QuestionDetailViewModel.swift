@@ -15,7 +15,8 @@ final class QuestionDetailViewModel: ObservableObject {
     @Published var errorMessage: String?
     @Published var updatedQuestionvotes: Int? = nil
     @Published var updatedAnswerVotes: [String: Int] = [:]
-
+    
+    
     private let airtable: AirtableService
     private let question: Question
 
@@ -54,6 +55,58 @@ final class QuestionDetailViewModel: ObservableObject {
         }
     }
     
+    private func resolveAuthorId(from auth: AuthViewModel) async throws -> String { 
+        if let id = auth.airtableUserId, !id.isEmpty { return id }
+
+        // Read email/name from the same source used in HomeView (AuthViewModel.state)
+        var email: String?
+        var name: String?
+        if case .signedIn(let claims) = auth.state {
+            email = (claims["email"] as? String)
+                ?? (claims["upn"] as? String)
+                ?? (claims["preferred_username"] as? String)
+            name  = (claims["name"] as? String)
+                ?? (claims["given_name"] as? String)
+                ?? email
+        }
+
+        guard let userEmail = email, !userEmail.isEmpty else {
+            throw NSError(domain: "AuthorId", code: 1, userInfo: [
+                NSLocalizedDescriptionKey: "Missing author identity. Please sign out and sign in again."
+            ])
+        }
+
+        let displayName = name ?? "Unknown"
+        let recId = try await airtable.createUserIfMissing(name: displayName, email: userEmail)
+        await MainActor.run { auth.airtableUserId = recId }
+        return recId
+    }
+
+    // NEW: use AuthViewModel, not a raw authorId string
+    func submitAnswer(text: String, auth: AuthViewModel) async {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            await MainActor.run { self.submitAnswerError = "Answer text cannot be empty." }
+            return
+        }
+
+        await MainActor.run {
+            self.isSubmittingAnswer = true
+            self.submitAnswerError = nil
+        }
+
+        do {
+            let authorId = try await resolveAuthorId(from: auth)
+            try await airtable.createAnswer(for: question, text: trimmed, authorId: authorId)
+            await fetchAnswers(for: question)
+            await MainActor.run { self.isSubmittingAnswer = false }
+        } catch {
+            await MainActor.run {
+                self.isSubmittingAnswer = false
+                self.submitAnswerError = error.localizedDescription
+            }
+        }
+    }
     
     func upvoteQuestion(question: Question) async {
         // Simple local increment
@@ -91,8 +144,44 @@ final class QuestionDetailViewModel: ObservableObject {
 
         // Optional: Uncomment when ready to save to Airtable
         // try? await airtable.updateUpvotes(for: answer.id, to: newCount, in: "Answers")
-        
-        
+    }
+    
+    // MARK: - Submit Answer
+    @Published var isSubmittingAnswer = false
+    @Published var submitAnswerError: String?
+    
+    func submitAnswer(text: String, authorId: String) async {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            await MainActor.run { self.submitAnswerError = "Answer text cannot be empty." }
+            return
+        }
+
+        await MainActor.run {
+            self.isSubmittingAnswer = true
+            self.submitAnswerError = nil
+        }
+
+        do {
+            try await airtable.createAnswer(for: question, text: trimmed, authorId: authorId)
+            await fetchAnswers(for: question)
+            await MainActor.run { self.isSubmittingAnswer = false }
+        } catch {
+            let friendly: String
+            if let svcErr = error as? AirtableService.ServiceError {
+                switch svcErr {
+                case .missingAuthorId: friendly = "Missing author identity. Please sign out and sign in again."   // NEW
+                case .invalidQuestionId: friendly = "Invalid question id. Please refresh and try again."          // NEW
+                default: friendly = "Failed to submit answer."
+                }
+            } else {
+                friendly = "Failed to submit answer: \(error.localizedDescription)"
+            }
+            await MainActor.run {
+                self.isSubmittingAnswer = false
+                self.submitAnswerError = friendly // NEW
+            }
+        }
     }
 
 }

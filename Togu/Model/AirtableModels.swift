@@ -40,6 +40,12 @@ struct UserFields: Codable {
     var Points: Int?
 }
 
+struct AirtableCreateResponse<T: Codable>: Codable { 
+    let id: String?
+    let fields: T?
+    let createdTime: String?
+}
+
 // 2. Questions
 struct QuestionFields: Codable {
     let questionID: String?
