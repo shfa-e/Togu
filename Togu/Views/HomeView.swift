@@ -23,9 +23,121 @@ struct HomeView: View {
         return AirtableService(config: config)
     }()
 
+    // Available tags for filtering (same as in AskQuestionViewModel)
+    private let availableTags = [
+        "iOS", "Swift", "UI", "Database", "Backend",
+        "Frontend", "API", "Airtable", "Learning", "General"
+    ]
+    
     var body: some View {
         NavigationStack {
             List {
+                // Search and Filter Section
+                Section {
+                    // Search Bar
+                    HStack {
+                        Image(systemName: "magnifyingglass")
+                            .foregroundStyle(.secondary)
+                        TextField("Search questions...", text: $feed.searchText)
+                            .textFieldStyle(.plain)
+                            .autocorrectionDisabled()
+                            .textInputAutocapitalization(.never)
+                            .onSubmit {
+                                if case .signedIn = auth.state {
+                                    feed.loadQuestions(auth: auth)
+                                }
+                            }
+                            .onChange(of: feed.searchText) { oldValue, newValue in
+                                // Debounce search - reload after user stops typing
+                                Task {
+                                    try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+                                    // Only reload if the search text hasn't changed during the delay
+                                    if feed.searchText == newValue && !newValue.isEmpty {
+                                        if case .signedIn = auth.state {
+                                            feed.loadQuestions(auth: auth)
+                                        }
+                                    } else if feed.searchText.isEmpty && oldValue != newValue {
+                                        // Reload immediately when search is cleared
+                                        if case .signedIn = auth.state {
+                                            feed.loadQuestions(auth: auth)
+                                        }
+                                    }
+                                }
+                            }
+                        
+                        if !feed.searchText.isEmpty {
+                            Button {
+                                feed.searchText = ""
+                                if case .signedIn = auth.state {
+                                    feed.loadQuestions(auth: auth)
+                                }
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    .padding(.vertical, 4)
+                    
+                    // Tag Filter Chips
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            // "All" button to clear filter
+                            Button {
+                                feed.selectedTag = nil
+                                if case .signedIn = auth.state {
+                                    feed.loadQuestions(auth: auth)
+                                }
+                            } label: {
+                                Text("All")
+                                    .font(.caption)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                                    .background(
+                                        feed.selectedTag == nil
+                                            ? Color.accentColor
+                                            : Color.secondary.opacity(0.15)
+                                    )
+                                    .foregroundColor(
+                                        feed.selectedTag == nil
+                                            ? .white
+                                            : .primary
+                                    )
+                                    .clipShape(Capsule())
+                            }
+                            
+                            // Tag filter buttons
+                            ForEach(availableTags, id: \.self) { tag in
+                                Button {
+                                    feed.selectedTag = (feed.selectedTag == tag) ? nil : tag
+                                    if case .signedIn = auth.state {
+                                        feed.loadQuestions(auth: auth)
+                                    }
+                                } label: {
+                                    Text(tag)
+                                        .font(.caption)
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 6)
+                                        .background(
+                                            feed.selectedTag == tag
+                                                ? Color.accentColor
+                                                : Color.secondary.opacity(0.15)
+                                        )
+                                        .foregroundColor(
+                                            feed.selectedTag == tag
+                                                ? .white
+                                                : .primary
+                                        )
+                                        .clipShape(Capsule())
+                                }
+                            }
+                        }
+                        .padding(.horizontal, 4)
+                    }
+                } header: {
+                    Text("Search & Filter")
+                }
+                
                 Section {
                     if feed.isLoading {
                         ZStack {
@@ -61,9 +173,17 @@ struct HomeView: View {
                         ZStack {
                             Color.clear
                             ContentUnavailableView(
-                                "No questions yet",
+                                feed.searchText.isEmpty && feed.selectedTag == nil
+                                    ? "No questions yet"
+                                    : "No questions found",
                                 systemImage: "text.bubble",
-                                description: Text("Be the first to ask a question!")
+                                description: Text(
+                                    feed.searchText.isEmpty && feed.selectedTag == nil
+                                        ? "Be the first to ask a question!"
+                                        : feed.selectedTag != nil
+                                            ? "Try a different tag or search term"
+                                            : "Try a different search term"
+                                )
                             )
                         }
                         .listRowInsets(.none)

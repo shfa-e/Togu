@@ -16,6 +16,10 @@ final class FeedViewModel: ObservableObject {
     @Published var updatedQuestionVotes: [String: Int] = [:]
     @Published var hasVotedOnQuestions: [String: Bool] = [:]
     @Published var isVoting = false
+    
+    // Search and filter state
+    @Published var searchText: String = ""
+    @Published var selectedTag: String? = nil
 
     private lazy var airtableServiceInternal: AirtableService? = {
         guard let config = AirtableConfig() else { return nil }
@@ -36,7 +40,11 @@ final class FeedViewModel: ObservableObject {
                 return
             }
             do {
-                let items = try await airtable.fetchQuestions()
+                // Use search and tag filters
+                let items = try await airtable.fetchQuestions(
+                    searchText: searchText.isEmpty ? nil : searchText,
+                    selectedTag: selectedTag
+                )
                 self.questions = items
 
                 // Hydrate per-question vote state for this user
@@ -71,7 +79,10 @@ final class FeedViewModel: ObservableObject {
     // Refresh from Airtable and (optionally) re-hydrate votes
     func reload(using service: AirtableService, auth: AuthViewModel? = nil) async {
         do {
-            var latest = try await service.fetchQuestions()
+            var latest = try await service.fetchQuestions(
+                searchText: searchText.isEmpty ? nil : searchText,
+                selectedTag: selectedTag
+            )
 
             if let auth = auth, let userId = try? await resolveAuthorId(from: auth) {
                 for i in 0..<latest.count {

@@ -35,9 +35,49 @@ final class AirtableService {
     
     // MARK: - Fetch Questions
 
-    func fetchQuestions() async throws -> [Question] {
-        let url = try makeListURL(tableName: config.questionsTable)
-        var request = URLRequest(url: url)
+    func fetchQuestions(searchText: String? = nil, selectedTag: String? = nil) async throws -> [Question] {
+        let baseURL = try makeListURL(tableName: config.questionsTable)
+        var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)
+        
+        // Build filter formula if we have search text or selected tag
+        var filterParts: [String] = []
+        
+        if let tag = selectedTag, !tag.isEmpty {
+            // Filter by tag: check if Tags array contains the selected tag
+            // For Airtable multi-select fields, use FIND to check if value exists in array
+            filterParts.append("FIND('\(tag)', {Tags})")
+        }
+        
+        if let search = searchText, !search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            let trimmedSearch = search.trimmingCharacters(in: .whitespacesAndNewlines)
+            // Search in both Title and Body fields
+            // Use OR to search in either field, and use FIND for case-insensitive matching
+            let titleSearch = "FIND(LOWER('\(trimmedSearch.lowercased())'), LOWER({Title}))"
+            let bodySearch = "FIND(LOWER('\(trimmedSearch.lowercased())'), LOWER({Body}))"
+            filterParts.append("OR(\(titleSearch), \(bodySearch))")
+        }
+        
+        // Combine filters with AND if we have both tag and search
+        let formula: String?
+        if filterParts.count == 1 {
+            formula = filterParts.first
+        } else if filterParts.count > 1 {
+            formula = "AND(\(filterParts.joined(separator: ", ")))"
+        } else {
+            formula = nil
+        }
+        
+        if let formula = formula {
+            components?.queryItems = [
+                URLQueryItem(name: "filterByFormula", value: formula)
+            ]
+        }
+        
+        guard let finalURL = components?.url else {
+            throw ServiceError.url
+        }
+        
+        var request = URLRequest(url: finalURL)
         request.httpMethod = "GET"
         request.setValue("Bearer \(config.apiKey)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
