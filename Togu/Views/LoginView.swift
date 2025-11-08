@@ -37,19 +37,27 @@ struct LoginView: View {
             Spacer()
 
             Button {
-                auth.signIn() // Router will auto-progress via RootRouter onChange
+                auth.signIn()
             } label: {
-                Text("Sign in with IDServe")
-                    .font(.headline)
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(authIsBusy ? Color.gray : Color.indigo)
-                    .clipShape(RoundedRectangle(cornerRadius: 25))
+                HStack {
+                    if authIsBusy {
+                        ProgressView()
+                            .tint(.white)
+                        Text("Signing in...")
+                    } else {
+                        Text("Sign in with IDServe")
+                    }
+                }
+                .font(.headline)
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(authIsBusy ? Color.gray : Color.indigo)
+                .clipShape(RoundedRectangle(cornerRadius: 25))
+                .animation(.easeInOut(duration: 0.2), value: authIsBusy)
             }
             .padding(.horizontal)
             .disabled(authIsBusy)
-
             if case .error(let errorMsg) = auth.state {
                 Text(errorMsg)
                     .foregroundColor(.red)

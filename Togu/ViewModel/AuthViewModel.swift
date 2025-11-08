@@ -14,7 +14,7 @@ import AuthenticationServices
 
 @MainActor
 final class AuthViewModel: ObservableObject {
-    @Published var state: AuthState = .signedOut
+    @Published var state: AuthState = .restoring
     @Published var message: String = ""
     @Published var airtableUserId: String? = nil
 
@@ -38,16 +38,39 @@ final class AuthViewModel: ObservableObject {
 
     // MARK: - Restore session if still valid
     private func checkExistingSession() {
-        guard let olOidc else { return }
+        guard let olOidc else {
+            state = .signedOut
+            return
+        }
 
-        if let accessToken = olOidc.olAuthState.accessToken, !accessToken.isEmpty {
-            olOidc.introspect { [weak self] isValid, _ in
-                guard let self else { return }
+        // No locally stored token → go straight to login (no login flash)
+        guard let accessToken = olOidc.olAuthState.accessToken, !accessToken.isEmpty else {
+            state = .signedOut
+            return
+        }
+
+        // There is a token → verify it
+        olOidc.introspect { [weak self] isValid, _ in
+            guard let self else { return }
+            Task { @MainActor in
                 if isValid {
-                    self.state = .signedIn(userInfo: [:])
-                    self.message = "Session restored ✅"
+                    self.fetchUserOnRestore()
                 } else {
                     self.state = .signedOut
+                }
+            }
+        }
+    }
+
+    private func fetchUserOnRestore() {
+        olOidc?.getUserInfo { [weak self] userInfo, _ in
+            guard let self else { return }
+            Task { @MainActor in
+                if let info = userInfo as? [String: Any] {
+                    self.state = .signedIn(userInfo: info)
+                } else {
+                    // Even if /userinfo fails, a valid session exists; let Home show and lazy-load later
+                    self.state = .signedIn(userInfo: [:])
                 }
             }
         }
@@ -78,36 +101,31 @@ final class AuthViewModel: ObservableObject {
                 return
             }
 
-            if let claims = olOidc.olAuthState.idTokenParsed?.claims as? [String: Any] {
-                self.state = .signedIn(userInfo: claims)
-                self.message = "✅ Signed in successfully!"
-            } else {
-                self.state = .signedIn(userInfo: [:])
-                self.message = "✅ Signed in (no claims returned)."
-            }
-        }
-        
-        // After setting `self.state = .signedIn(userInfo: claims)`:
-        Task { // NEW
-            guard let cfg = AirtableConfig() else { return }        // NEW
-            let airtable = AirtableService(config: cfg)             // NEW
-            if case .signedIn(let claims) = self.state {            // NEW
-                let name = (claims["name"] as? String)
-                        ?? (claims["given_name"] as? String)
-                        ?? "Unknown"
-                let email = (claims["email"] as? String) ?? ""      // NEW
-                if !email.isEmpty {
-                    let id = try? await airtable.createUserIfMissing(name: name, email: email) // NEW
-                    await MainActor.run { self.airtableUserId = id }                            // NEW
-                    print("✅ Airtable user id linked: \(self.airtableUserId ?? "nil")")        // NEW
-                } else {
-                    print("⚠️ Missing email in OneLogin claims — cannot sync Airtable user.")   // NEW
+            // Parse claims immediately and update UI synchronously (no Task wrapper here)
+            let claims = (olOidc.olAuthState.idTokenParsed?.claims as? [String: Any]) ?? [:]
+            self.state = .signedIn(userInfo: claims)
+
+            // Airtable — run after routing has moved to Home
+            Task {
+                if
+                    let cfg = AirtableConfig(),
+                    let email = claims["email"] as? String
+                {
+                    let airtable = AirtableService(config: cfg)
+                    let name = (claims["name"] as? String)
+                                ?? (claims["given_name"] as? String)
+                                ?? "Unknown"
+
+                    let id = try? await airtable.createUserIfMissing(name: name, email: email)
+                    await MainActor.run { self.airtableUserId = id }
                 }
             }
+
+            self.message = "✅ Signed in"
         }
     }
 
-    // MARK: - Fetch User Info
+    // MARK: - Fetch User Info (debug / manual)
     func showUserInfo() {
         guard let olOidc else { return }
 
@@ -129,7 +147,7 @@ final class AuthViewModel: ObservableObject {
         }
     }
 
-    // MARK: - Check Token Validity
+    // MARK: - Check Token Validity (optional utility)
     func checkTokenValidity() {
         guard let olOidc else { return }
 
@@ -152,10 +170,8 @@ final class AuthViewModel: ObservableObject {
         message = "Signing out..."
 
         // 1. Revoke tokens on the server
-        olOidc.revokeToken(tokenType: .AccessToken) { [weak self] _ in
-            olOidc.revokeToken(tokenType: .RefreshToken) { [weak self] _ in
-                guard let self else { return }
-
+        olOidc.revokeToken(tokenType: .AccessToken) { _ in
+            olOidc.revokeToken(tokenType: .RefreshToken) { _ in
                 // 2. Delete locally saved tokens
                 olOidc.deleteTokens()
 
@@ -164,7 +180,7 @@ final class AuthViewModel: ObservableObject {
 
                 // 4. Perform true OneLogin logout in ASWebAuthenticationSession
                 Task { @MainActor in
-                    self.performServerLogout()  // 👈 NEW
+                    self.performServerLogout()
                     self.state = .signedOut
                     self.message = "✅ Signed out successfully."
                 }
@@ -209,13 +225,14 @@ final class AuthViewModel: ObservableObject {
     // MARK: - Lightweight Int tag for animation
     var animationPhase: Int {
         switch state {
+        case .restoring: return 0
         case .signedOut: return 0
         case .signingIn: return 1
-        case .signedIn: return 2
-        case .error: return 3
+        case .signedIn:  return 2
+        case .error:     return 3
         }
     }
-    
+
     // MARK: - Convenience accessors for OneLogin claims
     var userEmail: String? {
         if case .signedIn(let claims) = state {
@@ -234,7 +251,5 @@ final class AuthViewModel: ObservableObject {
                 ?? userEmail
         }
         return nil
-    }                                                  
-    
-    
+    }
 }

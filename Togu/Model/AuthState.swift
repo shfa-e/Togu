@@ -5,10 +5,10 @@
 //  Created by Whyyy on 05/11/2025.
 //
 
-
 import Foundation
 
 enum AuthState: Equatable {
+    case restoring
     case signedOut
     case signingIn
     case signedIn(userInfo: [String: Any])
@@ -22,7 +22,7 @@ enum AuthState: Equatable {
         case (.error(let a), .error(let b)):
             return a == b
         case (.signedIn, .signedIn):
-            return true  // we don't compare userInfo contents
+            return true // we don't compare userInfo contents
         default:
             return false
         }
