@@ -40,7 +40,7 @@ struct RootRouter: View {
                     .font(.headline)
                     .transition(.opacity)
             case .home:
-                HomeView()
+                MainTabView()
                     .environmentObject(auth)
                     .environmentObject(feed)
                     .transition(.opacity.combined(with: .move(edge: .trailing)))

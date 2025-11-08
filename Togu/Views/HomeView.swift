@@ -17,7 +17,6 @@ struct HomeView: View {
     @State private var isSigningOut = false
     @State private var showAskQuestion = false
     @State private var showConfigAlert = false
-    @State private var showProfile = false
     @State private var airtableService: AirtableService? = {
         guard let config = AirtableConfig() else { return nil }
         return AirtableService(config: config)
@@ -238,14 +237,6 @@ struct HomeView: View {
                 signOutToolbar()
             }
         }
-        .sheet(isPresented: $showProfile) {
-            if let service = airtableService {
-                NavigationStack {
-                    ProfileView(airtable: service, auth: auth)
-                        .environmentObject(auth)
-                }
-            }
-        }
         .sheet(isPresented: $showAskQuestion) {
             if let service = airtableService {
                 AskQuestionView(
@@ -307,12 +298,6 @@ struct HomeView: View {
                 if let info = extractUserInfo(),
                    let email = info["email"] as? String {
                     Label(email, systemImage: "envelope")
-                }
-                
-                Button {
-                    showProfile = true
-                } label: {
-                    Label("Profile", systemImage: "person.circle")
                 }
                 
                 Divider()
