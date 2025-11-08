@@ -130,6 +130,11 @@ final class AirtableService {
 
         // decode or ignore response as necessary; here we simply succeed on 2xx
         _ = data
+        
+        // Check and award milestone badges (fire and forget)
+        Task {
+            await checkAnswerMilestones(userRecordId: authorId)
+        }
     }
 
     // MARK: - Create Question
@@ -181,6 +186,14 @@ final class AirtableService {
         let record = try JSONDecoder().decode(AirtableRecord<QuestionFields>.self, from: data)
         let fallbackId = record.id ?? UUID().uuidString
         let createdTime = record.createdTime ?? ISO8601DateFormatter().string(from: Date())
+        
+        // Check and award milestone badges (fire and forget)
+        Task {
+            // small initial delay so Airtable has time to index the new record
+            try? await Task.sleep(nanoseconds: 1_000_000_000) // 1s
+            await checkQuestionMilestones(userRecordId: authorId)
+        }
+        
         return record.fields.toQuestion(fallbackId: fallbackId, createdTime: createdTime)
     }
 
@@ -569,4 +582,270 @@ final class AirtableService {
         }
         return nil
     }
+    
+    // MARK: - Badge Earning Logic
+    
+    /// Check if a user has already earned a specific badge by name
+    func hasUserEarnedBadge(userRecordId: String, badgeName: String) async throws -> Bool {
+        let baseURL = try makeListURL(tableName: "Badges")
+        var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)
+        
+        // Filter: Badge Name matches AND EarnedBy contains userRecordId
+        let formula = "AND({Badge Name}='\(badgeName)', FIND('\(userRecordId)', {EarnedBy}) > 0)"
+        components?.queryItems = [
+            URLQueryItem(name: "filterByFormula", value: formula)
+        ]
+        
+        guard let finalURL = components?.url else { throw ServiceError.url }
+        
+        var request = URLRequest(url: finalURL)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(config.apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        
+        let (data, response) = try await urlSession.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw ServiceError.http
+        }
+        
+        let decoded = try JSONDecoder().decode(AirtableListResponse<BadgeFields>.self, from: data)
+        return !decoded.records.isEmpty
+    }
+    
+    /// Award a badge to a user by badge name
+    func awardBadge(userRecordId: String, badgeName: String) async throws {
+        print("🏆 Attempting to award badge '\(badgeName)' to user \(userRecordId)")
+        
+        // First, check if user already has this badge
+        do {
+            let alreadyHas = try await hasUserEarnedBadge(userRecordId: userRecordId, badgeName: badgeName)
+            if alreadyHas {
+                print("⚠️ User \(userRecordId) already has badge: \(badgeName)")
+                return
+            }
+        } catch {
+            print("⚠️ Error checking if user has badge: \(error)")
+            // Continue anyway - might be a transient error
+        }
+        
+        // Find the badge record by name
+        let baseURL = try makeListURL(tableName: "Badges")
+        var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)
+        let formula = "{Badge Name}='\(badgeName)'"
+        components?.queryItems = [
+            URLQueryItem(name: "filterByFormula", value: formula)
+        ]
+        
+        guard let searchURL = components?.url else {
+            print("❌ Failed to create search URL for badge: \(badgeName)")
+            throw ServiceError.url
+        }
+        
+        print("🔍 Searching for badge with formula: \(formula)")
+        
+        var searchRequest = URLRequest(url: searchURL)
+        searchRequest.httpMethod = "GET"
+        searchRequest.setValue("Bearer \(config.apiKey)", forHTTPHeaderField: "Authorization")
+        searchRequest.setValue("application/json", forHTTPHeaderField: "Accept")
+        
+        let (searchData, searchResponse) = try await urlSession.data(for: searchRequest)
+        
+        guard let http = searchResponse as? HTTPURLResponse else {
+            print("❌ Invalid response when searching for badge")
+            throw ServiceError.http
+        }
+        
+        if !(200..<300).contains(http.statusCode) {
+            let errorBody = String(data: searchData, encoding: .utf8) ?? "Unknown error"
+            print("❌ HTTP \(http.statusCode) when searching for badge '\(badgeName)': \(errorBody)")
+            throw ServiceError.http
+        }
+        
+        let decoded = try JSONDecoder().decode(AirtableListResponse<BadgeFields>.self, from: searchData)
+        
+        guard let badgeRecord = decoded.records.first else {
+            print("⚠️ Badge '\(badgeName)' not found in Airtable. Available badges: \(decoded.records.map { $0.fields.badgeName ?? "Unknown" })")
+            // Try to list all badges for debugging
+            await listAllBadges()
+            return
+        }
+        
+        guard let badgeRecordId = badgeRecord.id else {
+            print("❌ Badge record found but has no ID")
+            return
+        }
+        
+        print("✅ Found badge record: \(badgeRecordId)")
+        
+        // Get current EarnedBy array and add the user
+        var currentEarnedBy = badgeRecord.fields.earnedBy ?? []
+        if currentEarnedBy.contains(userRecordId) {
+            print("⚠️ User already in EarnedBy array")
+            return
+        }
+        
+        currentEarnedBy.append(userRecordId)
+        print("📝 Updating badge with \(currentEarnedBy.count) users in EarnedBy")
+        
+        // Update the badge record with the new user
+        guard let updateURL = URL(string: "https://api.airtable.com/v0/\(config.baseId)/Badges/\(badgeRecordId)") else {
+            print("❌ Failed to create update URL")
+            throw ServiceError.url
+        }
+        
+        var updateRequest = URLRequest(url: updateURL)
+        updateRequest.httpMethod = "PATCH"
+        updateRequest.setValue("Bearer \(config.apiKey)", forHTTPHeaderField: "Authorization")
+        updateRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let updateBody: [String: Any] = [
+            "fields": [
+                "EarnedBy": currentEarnedBy
+            ]
+        ]
+        
+        updateRequest.httpBody = try JSONSerialization.data(withJSONObject: updateBody, options: [])
+        
+        let (updateData, updateResponse) = try await urlSession.data(for: updateRequest)
+        
+        guard let updateHttp = updateResponse as? HTTPURLResponse else {
+            print("❌ Invalid response when updating badge")
+            throw ServiceError.http
+        }
+        
+        if !(200..<300).contains(updateHttp.statusCode) {
+            let errorBody = String(data: updateData, encoding: .utf8) ?? "Unknown error"
+            print("❌ HTTP \(updateHttp.statusCode) when updating badge: \(errorBody)")
+            throw ServiceError.http
+        }
+        
+        print("✅ Successfully awarded badge '\(badgeName)' to user \(userRecordId)")
+    }
+    
+    /// Helper method to list all badges for debugging
+    private func listAllBadges() async {
+        do {
+            let baseURL = try makeListURL(tableName: "Badges")
+            var request = URLRequest(url: baseURL)
+            request.httpMethod = "GET"
+            request.setValue("Bearer \(config.apiKey)", forHTTPHeaderField: "Authorization")
+            request.setValue("application/json", forHTTPHeaderField: "Accept")
+            
+            let (data, response) = try await urlSession.data(for: request)
+            guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+                return
+            }
+            
+            let decoded = try JSONDecoder().decode(AirtableListResponse<BadgeFields>.self, from: data)
+            let badgeNames = decoded.records.compactMap { $0.fields.badgeName }
+            print("📋 Available badges in Airtable: \(badgeNames)")
+        } catch {
+            print("⚠️ Failed to list badges: \(error)")
+        }
+    }
+    
+    /// Check and award milestone badges after a user action
+    func checkAndAwardMilestoneBadges(userRecordId: String, action: BadgeMilestone) async {
+        do {
+            switch action {
+            case .firstQuestion:
+                try await awardBadge(userRecordId: userRecordId, badgeName: "First Question")
+            case .firstAnswer:
+                try await awardBadge(userRecordId: userRecordId, badgeName: "First Answer")
+            case .fiveQuestions:
+                try await awardBadge(userRecordId: userRecordId, badgeName: "Question Master")
+            case .tenAnswers:
+                try await awardBadge(userRecordId: userRecordId, badgeName: "Answer Expert")
+            case .hundredPoints:
+                try await awardBadge(userRecordId: userRecordId, badgeName: "Centurion")
+            }
+        } catch {
+            // Silently fail - badge awarding shouldn't break the main flow
+            print("⚠️ Failed to award badge for \(action): \(error)")
+        }
+    }
+    
+    // Check user's question count and award milestone badges
+    func checkQuestionMilestones(userRecordId: String) async {
+        print("🔍 Checking question milestones for user: \(userRecordId)")
+        do {
+            var attempts = 0
+            var questions: [Question] = []
+            while attempts < 4 { // attempt 0..3 => 4 tries (first immediate)
+                questions = try await fetchUserQuestions(userRecordId: userRecordId)
+                let count = questions.count
+                print("📊 User has \(count) question(s) (attempt \(attempts + 1))")
+                
+                if count >= 1 {
+                    // award corresponding badges if thresholds hit
+                    if count == 1 {
+                        print("🎯 User has exactly 1 question - awarding 'First Question' badge")
+                        do {
+                            try await awardBadge(userRecordId: userRecordId, badgeName: "First Question")
+                        } catch {
+                            print("❌ Failed to award 'First Question' badge: \(error)")
+                        }
+                    }
+                    if count == 5 {
+                        print("🎯 User has exactly 5 questions - awarding 'Question Master' badge")
+                        do {
+                            try await awardBadge(userRecordId: userRecordId, badgeName: "Question Master")
+                        } catch {
+                            print("❌ Failed to award 'Question Master' badge: \(error)")
+                        }
+                    }
+                    return
+                }
+                // If we haven't seen the new question yet, wait and retry
+                attempts += 1
+                if attempts < 4 {
+                    let delaySeconds = UInt64(pow(2.0, Double(attempts - 1))) // 1, 2, 4
+                    print("⏳ Waiting \(delaySeconds) seconds before retry...")
+                    try? await Task.sleep(nanoseconds: delaySeconds * 1_000_000_000)
+                }
+            }
+            print("⚠️ After \(attempts) attempts, user still has 0 questions - no badge awarded")
+        } catch {
+            print("❌ Failed to check question milestones: \(error)")
+        }
+    }
+
+    
+    /// Check user's answer count and award milestone badges
+    func checkAnswerMilestones(userRecordId: String) async {
+        print("🔍 Checking answer milestones for user: \(userRecordId)")
+        do {
+            let answers = try await fetchUserAnswers(userRecordId: userRecordId)
+            let count = answers.count
+            print("📊 User has \(count) answer(s)")
+            
+            if count == 1 {
+                print("🎯 User has exactly 1 answer - awarding 'First Answer' badge")
+                do {
+                    try await awardBadge(userRecordId: userRecordId, badgeName: "First Answer")
+                } catch {
+                    print("❌ Failed to award 'First Answer' badge: \(error)")
+                }
+            } else if count == 10 {
+                print("🎯 User has exactly 10 answers - awarding 'Answer Expert' badge")
+                do {
+                    try await awardBadge(userRecordId: userRecordId, badgeName: "Answer Expert")
+                } catch {
+                    print("❌ Failed to award 'Answer Expert' badge: \(error)")
+                }
+            }
+        } catch {
+            print("❌ Failed to check answer milestones: \(error)")
+        }
+    }
+}
+
+// MARK: - Badge Milestone Types
+
+enum BadgeMilestone {
+    case firstQuestion
+    case firstAnswer
+    case fiveQuestions
+    case tenAnswers
+    case hundredPoints
 }

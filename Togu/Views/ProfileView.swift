@@ -78,52 +78,39 @@ struct ProfileView: View {
             }
             
             // Badges Section
-            if !viewModel.badges.isEmpty {
-                Section("Badges") {
+            Section {
+                if viewModel.badges.isEmpty {
+                    VStack(spacing: 12) {
+                        Image(systemName: "medal")
+                            .font(.system(size: 40))
+                            .foregroundStyle(.secondary)
+                        Text("No badges yet")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        Text("Post questions and answers to earn badges!")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 20)
+                } else {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 16) {
                             ForEach(viewModel.badges, id: \.id) { badge in
-                                VStack(spacing: 8) {
-                                    if let iconURL = badge.iconURL {
-                                        AsyncImage(url: iconURL) { phase in
-                                            switch phase {
-                                            case .empty:
-                                                ProgressView()
-                                            case .success(let image):
-                                                image
-                                                    .resizable()
-                                                    .scaledToFit()
-                                            case .failure:
-                                                Image(systemName: "medal.fill")
-                                                    .font(.system(size: 40))
-                                                    .foregroundStyle(.yellow)
-                                            @unknown default:
-                                                EmptyView()
-                                            }
-                                        }
-                                        .frame(width: 60, height: 60)
-                                    } else {
-                                        Image(systemName: "medal.fill")
-                                            .font(.system(size: 50))
-                                            .foregroundStyle(.yellow)
-                                    }
-                                    
-                                    Text(badge.name)
-                                        .font(.caption)
-                                        .multilineTextAlignment(.center)
-                                        .lineLimit(2)
-                                    
-                                    if let date = badge.dateEarned {
-                                        Text(date, style: .date)
-                                            .font(.caption2)
-                                            .foregroundStyle(.secondary)
-                                    }
-                                }
-                                .frame(width: 100)
+                                BadgeCard(badge: badge)
                             }
                         }
                         .padding(.horizontal, 4)
                     }
+                }
+            } header: {
+                HStack {
+                    Text("Badges")
+                    Spacer()
+                    Text("\(viewModel.badges.count)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
             
@@ -250,6 +237,68 @@ private struct StatItem: View {
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
+    }
+}
+
+private struct BadgeCard: View {
+    let badge: (id: String, name: String, description: String?, iconURL: URL?, dateEarned: Date?)
+    
+    var body: some View {
+        VStack(spacing: 10) {
+            // Badge Icon
+            ZStack {
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: [.yellow.opacity(0.3), .orange.opacity(0.2)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 70, height: 70)
+                
+                if let iconURL = badge.iconURL {
+                    AsyncImage(url: iconURL) { phase in
+                        switch phase {
+                        case .empty:
+                            ProgressView()
+                        case .success(let image):
+                            image
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 50, height: 50)
+                        case .failure:
+                            Image(systemName: "medal.fill")
+                                .font(.system(size: 35))
+                                .foregroundStyle(.yellow)
+                        @unknown default:
+                            EmptyView()
+                        }
+                    }
+                } else {
+                    Image(systemName: "medal.fill")
+                        .font(.system(size: 35))
+                        .foregroundStyle(.yellow)
+                }
+            }
+            
+            // Badge Name
+            Text(badge.name)
+                .font(.caption)
+                .bold()
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+                .frame(width: 90)
+            
+            // Date Earned
+            if let date = badge.dateEarned {
+                Text(date, style: .date)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 8)
+        .frame(width: 110)
     }
 }
 
