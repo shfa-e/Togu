@@ -321,11 +321,6 @@ Contributions are welcome! Please follow these steps:
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
----
-
-## 👥 Authors
-
-- **Your Name** - *Initial work* - [YourGitHub](https://github.com/yourusername)
 
 ---
 
@@ -345,13 +340,8 @@ If you encounter any issues or have questions:
 2. Create a new issue with detailed information
 3. Contact the maintainers
 
----
-
-## 📸 Screenshots
-
-_Add screenshots of your app here_
 
 ---
 
-**Made with ❤️ for students, by students**
+**Made with ❤️ for learner, by learners**
 
