@@ -31,14 +31,35 @@ struct RootRouter: View {
         ZStack {
             switch router.route {
             case .restoring:
-                // Neutral splash so the login view never flashes during restore
-                ProgressView().transition(.opacity)
-            case .onboarding:
-                LoginView().transition(.opacity.combined(with: .scale))
-            case .signingIn:
-                ProgressView("Signing in…")
-                    .font(.headline)
+                SplashView()
                     .transition(.opacity)
+            case .onboarding:
+                LoginView()
+                    .transition(.opacity.combined(with: .scale))
+            case .signingIn:
+                ZStack {
+                    // Background matching splash
+                    LinearGradient(
+                        gradient: Gradient(colors: [
+                            Color.toguPrimary.opacity(0.1),
+                            Color.toguBackground
+                        ]),
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                    .ignoresSafeArea()
+                    
+                    VStack(spacing: 20) {
+                        ProgressView()
+                            .tint(.toguPrimary)
+                            .scaleEffect(1.5)
+                        
+                        Text("Signing in…")
+                            .font(.system(size: 18, weight: .medium))
+                            .foregroundColor(.toguTextPrimary)
+                    }
+                }
+                .transition(.opacity)
             case .home:
                 MainTabView()
                     .environmentObject(auth)

@@ -188,19 +188,13 @@ struct ProfileView: View {
         .navigationTitle("Profile")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .navigationBarLeading) {
-                HStack(spacing: 8) {
-                    Circle()
-                        .fill(Color.toguPrimary)
-                        .frame(width: 28, height: 28)
-                        .overlay(
-                            Text("T")
-                                .font(.system(size: 16, weight: .bold))
-                                .foregroundColor(.white)
-                        )
-                    Text("Profile")
-                        .font(.system(size: 18, weight: .bold))
-                        .foregroundColor(.toguTextPrimary)
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button {
+                    auth.signOut()
+                } label: {
+                    Image(systemName: "rectangle.portrait.and.arrow.right")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(.red)
                 }
             }
         }

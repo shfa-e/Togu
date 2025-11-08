@@ -1,21 +1,15 @@
 //
-//  LeaderboardView.swift
+//  Views.LeaderboardView.swift
 //  Togu
 //
-//  Created by Whyyy on 06/11/2025.
+//  Created by HY on 05/11/2025.
 //
 
 import SwiftUI
 
 struct LeaderboardView: View {
-    @EnvironmentObject var auth: AuthViewModel
-    @StateObject private var viewModel: LeaderboardViewModel
-    
     @State private var selectedTimeframe: Timeframe = .allTime
-    @State private var airtableService: AirtableService? = {
-        guard let config = AirtableConfig() else { return nil }
-        return AirtableService(config: config)
-    }()
+    @State private var leaderboardData = LeaderboardEntry.sampleData
     
     enum Timeframe: String, CaseIterable {
         case allTime = "All Time"
@@ -23,95 +17,42 @@ struct LeaderboardView: View {
         case thisWeek = "This Week"
     }
     
-    init() {
-        // Initialize with service - auth will be injected via environment
-        if let config = AirtableConfig() {
-            let service = AirtableService(config: config)
-            // Create a temporary auth for initialization - will be updated in onAppear
-            let tempAuth = AuthViewModel()
-            _viewModel = StateObject(wrappedValue: LeaderboardViewModel(airtable: service, auth: tempAuth))
-        } else {
-            // Fallback - should not happen if config is set
-            let tempService = AirtableService(config: AirtableConfig()!)
-            let tempAuth = AuthViewModel()
-            _viewModel = StateObject(wrappedValue: LeaderboardViewModel(airtable: tempService, auth: tempAuth))
-        }
-    }
-    
     var body: some View {
         VStack(spacing: 0) {
-            
-            
             // Segmented Control
             segmentedControl
                 .padding(.top, 12)
             
-            if viewModel.isLoading {
-                Spacer()
-                ProgressView()
-                Spacer()
-            } else if let error = viewModel.errorMessage {
-                Spacer()
-                VStack(spacing: 12) {
-                    Image(systemName: "exclamationmark.triangle")
-                        .font(.largeTitle)
-                        .foregroundStyle(.orange)
-                    Text(error)
-                        .multilineTextAlignment(.center)
-                    Button("Retry") {
-                        viewModel.loadLeaderboard()
-                    }
-                }
-                .padding()
-                Spacer()
-            } else {
-                ScrollView {
-                    VStack(spacing: 0) {
-                        // Top 3 Users
-                        topThreeSection
-                            .padding(.top, 24)
-                        
-                        // Divider
-                        if !viewModel.leaderboardEntries.isEmpty {
-                            Divider()
-                                .padding(.horizontal, 20)
-                                .padding(.vertical, 16)
-                        }
-                        
-                        // User's Rank Card
-                        if let currentUser = viewModel.currentUserEntry {
-                            userRankCard(entry: currentUser)
-                                .padding(.horizontal, 20)
-                                .padding(.bottom, 20)
-                        }
-                        
-                        // Leaderboard List (Rank 4+)
-                        LazyVStack(spacing: 12) {
-                            ForEach(viewModel.leaderboardEntries.filter { $0.rank > 3 }) { entry in
-                                LeaderboardRowView(entry: entry)
-                            }
-                        }
+            ScrollView {
+                VStack(spacing: 0) {
+                    // Top 3 Users
+                    topThreeSection
+                        .padding(.top, 24)
+                    
+                    // Divider
+                    Divider()
                         .padding(.horizontal, 20)
-                        .padding(.bottom, 80)
+                        .padding(.vertical, 16)
+                    
+                    // User's Rank Card
+                    userRankCard
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 20)
+                    
+                    // Leaderboard List (Rank 4+)
+                    LazyVStack(spacing: 12) {
+                        ForEach(leaderboardData.filter { $0.rank > 3 }) { entry in
+                            LeaderboardRowView(entry: entry)
+                        }
                     }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 80)
                 }
             }
         }
         .background(Color.toguBackground.ignoresSafeArea())
         .navigationTitle("Leaderboard")
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear {
-            // Update viewModel's auth reference
-            viewModel.updateAuth(auth)
-            if viewModel.leaderboardEntries.isEmpty {
-                if airtableService != nil {
-                    viewModel.loadLeaderboard()
-                }
-            }
-        }
-        .refreshable {
-            viewModel.loadLeaderboard()
-        }
     }
     
     // MARK: - Segmented Control
@@ -147,17 +88,17 @@ struct LeaderboardView: View {
     private var topThreeSection: some View {
         HStack(spacing: 12) {
             // Rank 2
-            if let second = viewModel.leaderboardEntries.first(where: { $0.rank == 2 }) {
+            if let second = leaderboardData.first(where: { $0.rank == 2 }) {
                 TopThreeUserView(entry: second, position: .second)
             }
             
             // Rank 1 (Center - Larger)
-            if let first = viewModel.leaderboardEntries.first(where: { $0.rank == 1 }) {
+            if let first = leaderboardData.first(where: { $0.rank == 1 }) {
                 TopThreeUserView(entry: first, position: .first)
             }
             
             // Rank 3
-            if let third = viewModel.leaderboardEntries.first(where: { $0.rank == 3 }) {
+            if let third = leaderboardData.first(where: { $0.rank == 3 }) {
                 TopThreeUserView(entry: third, position: .third)
             }
         }
@@ -165,14 +106,14 @@ struct LeaderboardView: View {
     }
     
     // MARK: - User Rank Card
-    private func userRankCard(entry: LeaderboardEntry) -> some View {
+    private var userRankCard: some View {
         HStack(spacing: 16) {
             // Rank Badge
             ZStack {
                 Circle()
                     .fill(Color.white.opacity(0.25))
                     .frame(width: 50, height: 50)
-                Text("#\(entry.rank)")
+                Text("#\(LeaderboardEntry.currentUser.rank)")
                     .font(.system(size: 16, weight: .bold))
                     .foregroundColor(.white)
             }
@@ -182,7 +123,7 @@ struct LeaderboardView: View {
                 Text("Your Rank")
                     .font(.system(size: 16, weight: .bold))
                     .foregroundColor(.white)
-                Text("\(entry.name) (Level \(entry.level))")
+                Text("\(LeaderboardEntry.currentUser.name) (Level \(LeaderboardEntry.currentUser.level))")
                     .font(.system(size: 14))
                     .foregroundColor(.white.opacity(0.9))
             }
@@ -191,7 +132,7 @@ struct LeaderboardView: View {
             
             // XP
             VStack(alignment: .trailing, spacing: 2) {
-                Text(formatXP(entry.xp))
+                Text(formatXP(LeaderboardEntry.currentUser.xp))
                     .font(.system(size: 24, weight: .bold))
                     .foregroundColor(.white)
                 Text("XP")
@@ -233,35 +174,18 @@ struct TopThreeUserView: View {
         VStack(spacing: 8) {
             ZStack(alignment: .bottomTrailing) {
                 // Profile Picture
-                if let imageURL = entry.profilePictureURL {
-                    AsyncImage(url: imageURL) { phase in
-                        switch phase {
-                        case .empty:
-                            Circle()
-                                .fill(Color.gray.opacity(0.15))
-                                .frame(width: profileSize, height: profileSize)
-                                .overlay(
-                                    ProgressView()
-                                )
-                        case .success(let image):
-                            image
-                                .resizable()
-                                .scaledToFill()
-                                .frame(width: profileSize, height: profileSize)
-                                .clipShape(Circle())
-                                .overlay(
-                                    Circle()
-                                        .stroke(borderColor, lineWidth: borderWidth)
-                                )
-                        case .failure:
-                            profilePlaceholder
-                        @unknown default:
-                            profilePlaceholder
-                        }
-                    }
-                } else {
-                    profilePlaceholder
-                }
+                Circle()
+                    .fill(Color.gray.opacity(0.15))
+                    .frame(width: profileSize, height: profileSize)
+                    .overlay(
+                        Image(systemName: "person.fill")
+                            .font(.system(size: iconSize))
+                            .foregroundColor(.toguTextSecondary.opacity(0.6))
+                    )
+                    .overlay(
+                        Circle()
+                            .stroke(borderColor, lineWidth: borderWidth)
+                    )
                 
                 // Rank Badge
                 rankBadge
@@ -283,21 +207,6 @@ struct TopThreeUserView: View {
                 .foregroundColor(entry.rank == 1 ? Color.toguPrimary : .toguTextPrimary)
         }
         .frame(maxWidth: .infinity)
-    }
-    
-    private var profilePlaceholder: some View {
-        Circle()
-            .fill(Color.gray.opacity(0.15))
-            .frame(width: profileSize, height: profileSize)
-            .overlay(
-                Image(systemName: "person.fill")
-                    .font(.system(size: iconSize))
-                    .foregroundColor(.toguTextSecondary.opacity(0.6))
-            )
-            .overlay(
-                Circle()
-                    .stroke(borderColor, lineWidth: borderWidth)
-            )
     }
     
     private var profileSize: CGFloat {
@@ -380,29 +289,14 @@ struct LeaderboardRowView: View {
             }
             
             // Profile Picture
-            if let imageURL = entry.profilePictureURL {
-                AsyncImage(url: imageURL) { phase in
-                    switch phase {
-                    case .empty:
-                        Circle()
-                            .fill(Color.gray.opacity(0.15))
-                            .frame(width: 44, height: 44)
-                            .overlay(ProgressView())
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: 44, height: 44)
-                            .clipShape(Circle())
-                    case .failure:
-                        profilePlaceholder
-                    @unknown default:
-                        profilePlaceholder
-                    }
-                }
-            } else {
-                profilePlaceholder
-            }
+            Circle()
+                .fill(Color.gray.opacity(0.15))
+                .frame(width: 44, height: 44)
+                .overlay(
+                    Image(systemName: "person.fill")
+                        .font(.system(size: 20))
+                        .foregroundColor(.toguTextSecondary.opacity(0.6))
+                )
             
             // Name and Level
             VStack(alignment: .leading, spacing: 4) {
@@ -446,17 +340,6 @@ struct LeaderboardRowView: View {
         )
     }
     
-    private var profilePlaceholder: some View {
-        Circle()
-            .fill(Color.gray.opacity(0.15))
-            .frame(width: 44, height: 44)
-            .overlay(
-                Image(systemName: "person.fill")
-                    .font(.system(size: 20))
-                    .foregroundColor(.toguTextSecondary.opacity(0.6))
-            )
-    }
-    
     @ViewBuilder
     private func achievementIcon(for achievement: LeaderboardEntry.Achievement) -> some View {
         switch achievement {
@@ -479,5 +362,11 @@ struct LeaderboardRowView: View {
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
         return formatter.string(from: NSNumber(value: xp)) ?? "\(xp)"
+    }
+}
+
+#Preview {
+    NavigationStack {
+        LeaderboardView()
     }
 }

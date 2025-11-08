@@ -522,6 +522,85 @@ final class AirtableService {
         }
     }
 
+    // MARK: - Helper Methods
+    
+    /// Get answer count for a question
+    func getAnswerCount(for questionId: String) async throws -> Int {
+        let baseURL = try makeListURL(tableName: "Answers")
+        var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)
+        let filter = "FIND('\(questionId)', {Question})"
+        components?.queryItems = [URLQueryItem(name: "filterByFormula", value: filter)]
+        
+        guard let finalURL = components?.url else { throw ServiceError.url }
+        
+        var request = URLRequest(url: finalURL)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(config.apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        
+        let (data, response) = try await urlSession.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw ServiceError.http
+        }
+        
+        let decoded = try JSONDecoder().decode(AirtableListResponse<AnswerFields>.self, from: data)
+        return decoded.records.count
+    }
+    
+    /// Get author details (profile picture, level) for a question
+    func getAuthorDetails(authorId: String) async throws -> (profilePictureURL: URL?, level: Int) {
+        do {
+            let (_, userFields) = try await fetchUser(recordId: authorId)
+            let points = userFields.Points ?? 0
+            let level = max(1, points / 100 + 1)
+            let pictureURL = userFields.ProfilePicture?.first?.url.flatMap { URL(string: $0) }
+            return (profilePictureURL: pictureURL, level: level)
+        } catch {
+            return (profilePictureURL: nil, level: 1)
+        }
+    }
+    
+    // MARK: - Leaderboard
+    
+    func fetchLeaderboard() async throws -> [(id: String, name: String, points: Int, profilePictureURL: URL?)] {
+        let baseURL = try makeListURL(tableName: "Users")
+        var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)
+        
+        // Sort by Points descending, limit to top 100
+        components?.queryItems = [
+            URLQueryItem(name: "sort[0][field]", value: "Points"),
+            URLQueryItem(name: "sort[0][direction]", value: "desc"),
+            URLQueryItem(name: "maxRecords", value: "100")
+        ]
+        
+        guard let finalURL = components?.url else {
+            throw ServiceError.url
+        }
+        
+        var request = URLRequest(url: finalURL)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(config.apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        
+        let (data, response) = try await urlSession.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw ServiceError.http
+        }
+        
+        let decoded = try JSONDecoder().decode(AirtableListResponse<UserFields>.self, from: data)
+        
+        return decoded.records.enumerated().map { index, record in
+            let fields = record.fields
+            let pictureURL = fields.ProfilePicture?.first?.url.flatMap { URL(string: $0) }
+            return (
+                id: record.id ?? "",
+                name: fields.Name ?? "Unknown",
+                points: fields.Points ?? 0,
+                profilePictureURL: pictureURL
+            )
+        }
+    }
+
     // MARK: - Profile/User Data
 
     func fetchUser(recordId: String) async throws -> (id: String, fields: UserFields) {

@@ -150,6 +150,8 @@ extension QuestionFields {
             let authorDisplay = (authorName?.first).flatMap { !$0.isEmpty ? $0 : nil } ??
                                 (author?.first).flatMap { !$0.isEmpty ? $0 : nil } ??
                                 "Unknown"
+            
+            let authorId = author?.first
 
         return Question(
             id: fallbackId,
@@ -158,6 +160,7 @@ extension QuestionFields {
             tags: tags ?? [],
             imageURL: url,
             author: authorDisplay,
+            authorId: authorId,
             upvotes: upvotes ?? 0,
             createdAt: created
         )

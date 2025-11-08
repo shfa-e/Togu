@@ -7,7 +7,7 @@
 
 import Foundation
 import Combine
-
+//
 @MainActor
 final class FeedViewModel: ObservableObject {
     @Published var isLoading: Bool = false
@@ -41,10 +41,36 @@ final class FeedViewModel: ObservableObject {
             }
             do {
                 // Use search and tag filters
-                let items = try await airtable.fetchQuestions(
+                var items = try await airtable.fetchQuestions(
                     searchText: searchText.isEmpty ? nil : searchText,
                     selectedTag: selectedTag
                 )
+                
+                // Enrich questions with author details (answer counts loaded separately in QuestionCardView)
+                // Use TaskGroup for parallel fetching
+                await withTaskGroup(of: (Int, URL?, Int?).self) { group in
+                    for i in 0..<items.count {
+                        let question = items[i]
+                        group.addTask {
+                            if let authorId = question.authorId {
+                                do {
+                                    let (profileURL, level) = try await airtable.getAuthorDetails(authorId: authorId)
+                                    return (i, profileURL, level)
+                                } catch {
+                                    print("⚠️ Failed to get author details for \(authorId): \(error)")
+                                    return (i, nil, nil)
+                                }
+                            }
+                            return (i, nil, nil)
+                        }
+                    }
+                    
+                    for await (index, profileURL, level) in group {
+                        items[index].authorProfilePictureURL = profileURL
+                        items[index].authorLevel = level
+                    }
+                }
+                
                 self.questions = items
 
                 // Hydrate per-question vote state for this user

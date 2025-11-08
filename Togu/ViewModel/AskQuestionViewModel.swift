@@ -12,16 +12,24 @@ import Combine
 final class AskQuestionViewModel: ObservableObject {
     @Published var title: String = ""
     @Published var body: String = ""
-    @Published private(set) var tags: [String] = []
+    @Published var tags: [String] = []
+    @Published var codeSnippet: String?
     @Published var imageData: Data?
     @Published var imageFilename: String?
     @Published var isSubmitting: Bool = false
     @Published var errorMessage: String?
-    @Published var availableTags: [String] = [
-           "iOS", "Swift", "UI", "Database", "Backend",
-           "Frontend", "API", "Airtable", "Learning", "General"]
+    // Predefined tags from Airtable database
+    let availableTags: [String] = [
+        "iOS", "Frontend", "Backend", "Swift", "UX", 
+        "UI", "Database", "General", "API", "Learning"
+    ]
+    
+    // Use same list for popular tags
+    var popularTags: [String] {
+        availableTags
+    }
 
-    private let maxTags = 3
+    private let maxTags = 5
     private let airtable: AirtableService
     var onCreated: ((Question) -> Void)?
 
@@ -48,6 +56,22 @@ final class AskQuestionViewModel: ObservableObject {
             tags.append(tag)
             errorMessage = nil
         }
+    }
+    
+    func addTag(_ tag: String) {
+        let trimmed = tag.trimmingCharacters(in: .whitespaces)
+        // Only allow tags from the predefined list
+        guard availableTags.contains(trimmed) else { return }
+        if !trimmed.isEmpty && tags.count < maxTags && !tags.contains(trimmed) {
+            tags.append(trimmed)
+            errorMessage = nil
+        } else if tags.count >= maxTags {
+            errorMessage = "You can select up to \(maxTags) tags."
+        }
+    }
+    
+    func removeTag(_ tag: String) {
+        tags.removeAll { $0 == tag }
     }
 
     func setImage(data: Data?, filename: String?) {
@@ -115,8 +139,8 @@ final class AskQuestionViewModel: ObservableObject {
     private func resetForm() {
         title = ""
         body = ""
-        availableTags = []
         tags = []
+        codeSnippet = nil
         imageData = nil
         imageFilename = nil
     }

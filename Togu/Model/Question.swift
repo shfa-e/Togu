@@ -13,10 +13,13 @@ struct Question: Identifiable, Hashable {
 	let text: String
 	let imageURL: URL?
 	let author: String
+	let authorId: String?
 	let upvotes: Int
 	let createdAt: Date
     let tags: [String]
     var userHasVoted: Bool = false
+    var authorProfilePictureURL: URL?
+    var authorLevel: Int?
 
 	init(
 		id: String,
@@ -25,8 +28,11 @@ struct Question: Identifiable, Hashable {
 		tags: [String] = [],
 		imageURL: URL? = nil,
 		author: String,
+		authorId: String? = nil,
 		upvotes: Int = 0,
-		createdAt: Date = Date()
+		createdAt: Date = Date(),
+		authorProfilePictureURL: URL? = nil,
+		authorLevel: Int? = nil
 	) {
 		self.id = id
 		self.title = title
@@ -34,8 +40,11 @@ struct Question: Identifiable, Hashable {
 		self.tags = tags
 		self.imageURL = imageURL
 		self.author = author
+		self.authorId = authorId
 		self.upvotes = upvotes
 		self.createdAt = createdAt
+		self.authorProfilePictureURL = authorProfilePictureURL
+		self.authorLevel = authorLevel
 	}
 }
 
