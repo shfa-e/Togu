@@ -38,8 +38,18 @@ struct QuestionDetailView: View {
                 }
             }
         }
-        .onAppear { vm.loadAnswers(for: question) }
-        .refreshable { vm.loadAnswers(for: question) }
+        .onAppear { 
+            vm.loadAnswers(for: question, auth: auth)
+            Task {
+                await vm.checkVoteStatus(auth: auth)
+            }
+        }
+        .refreshable { 
+            vm.loadAnswers(for: question, auth: auth)
+            Task {
+                await vm.checkVoteStatus(auth: auth)
+            }
+        }
         .sheet(isPresented: $showAnswerForm) {
             AnswerFormView(question: question, vm: vm)
                 .environmentObject(auth)
@@ -94,18 +104,19 @@ struct QuestionDetailView: View {
                     // 🟢 Upvote Button
                     Button {
                         Task {
-                            await vm.upvoteQuestion(question: question)
+                            await vm.upvoteQuestion(question: question, auth: auth)
                         }
                     } label: {
                         HStack(spacing: 4) {
-                            Image(systemName: "arrow.up.circle.fill")
+                            Image(systemName: vm.hasVotedOnQuestion ? "arrow.up.circle.fill" : "arrow.up.circle")
                                 .font(.caption)
                             Text("\(vm.updatedQuestionvotes ?? question.upvotes)")
                                 .font(.caption)
                         }
                     }
                     .buttonStyle(.borderless)
-                    .foregroundColor(.blue)
+                    .foregroundColor(vm.hasVotedOnQuestion ? .blue : .secondary)
+                    .disabled(vm.hasVotedOnQuestion || vm.isVoting)
                 }
                 
                 if !question.tags.isEmpty {
@@ -164,18 +175,19 @@ struct QuestionDetailView: View {
                             // 🟢 Upvote button for answers
                             Button {
                                 Task {
-                                    await vm.upvoteAnswer(answer)
+                                    await vm.upvoteAnswer(answer, auth: auth)
                                 }
                             } label: {
                                 HStack(spacing: 4) {
-                                    Image(systemName: "arrow.up.circle.fill")
+                                    Image(systemName: (vm.hasVotedOnAnswers[answer.id] == true) ? "arrow.up.circle.fill" : "arrow.up.circle")
                                         .font(.caption)
                                     Text("\(vm.updatedAnswerVotes[answer.id] ?? answer.upvotes)")
                                         .font(.caption)
                                 }
                             }
                             .buttonStyle(.borderless)
-                            .foregroundColor(.blue)
+                            .foregroundColor((vm.hasVotedOnAnswers[answer.id] == true) ? .blue : .secondary)
+                            .disabled((vm.hasVotedOnAnswers[answer.id] == true) || vm.isVoting)
                         }
                     }
                 }

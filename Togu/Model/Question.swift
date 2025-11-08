@@ -16,6 +16,7 @@ struct Question: Identifiable, Hashable {
 	let upvotes: Int
 	let createdAt: Date
     let tags: [String]
+    var userHasVoted: Bool = false
 
 	init(
 		id: String,

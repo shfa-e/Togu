@@ -17,7 +17,9 @@ final class QuestionDetailViewModel: ObservableObject {
     @Published var updatedAnswerVotes: [String: Int] = [:]
     @Published var isSubmittingAnswer = false
     @Published var submitAnswerError: String?
-    
+    @Published var hasVotedOnQuestion = false
+    @Published var hasVotedOnAnswers: [String: Bool] = [:]
+    @Published var isVoting = false
     
     private let airtable: AirtableService
     private let question: Question
@@ -27,8 +29,64 @@ final class QuestionDetailViewModel: ObservableObject {
         self.airtable = airtable
     }
 
-    func loadAnswers(for question: Question) {
-        Task { await fetchAnswers(for: question) }
+    func loadAnswers(for question: Question, auth: AuthViewModel? = nil) {
+        Task { 
+            await fetchAnswers(for: question)
+            if let auth = auth {
+                await checkVoteStatus(auth: auth)
+            }
+        }
+    }
+    
+    func checkVoteStatus(auth: AuthViewModel?) async {
+        guard let auth = auth else { return }
+        
+        // Resolve user ID
+        guard let userId = auth.airtableUserId, !userId.isEmpty else {
+            // Try to resolve it
+            do {
+                let id = try await resolveAuthorId(from: auth)
+                await checkVoteStatusForUser(userId: id)
+            } catch {
+                print("⚠️ Could not resolve user ID for vote check: \(error)")
+            }
+            return
+        }
+        
+        await checkVoteStatusForUser(userId: userId)
+    }
+    
+    private func checkVoteStatusForUser(userId: String) async {
+        // Check question vote
+        do {
+            let voted = try await airtable.hasUserVoted(
+                userId: userId,
+                targetType: "Question",
+                targetId: question.id
+            )
+            await MainActor.run {
+                hasVotedOnQuestion = voted
+            }
+        } catch {
+            print("⚠️ Error checking question vote: \(error)")
+        }
+        
+        // Check answer votes (use current answers array)
+        let currentAnswers = await MainActor.run { answers }
+        for answer in currentAnswers {
+            do {
+                let voted = try await airtable.hasUserVoted(
+                    userId: userId,
+                    targetType: "Answer",
+                    targetId: answer.id
+                )
+                await MainActor.run {
+                    hasVotedOnAnswers[answer.id] = voted
+                }
+            } catch {
+                print("⚠️ Error checking answer vote for \(answer.id): \(error)")
+            }
+        }
     }
 
     private func fetchAnswers(for question: Question) async {
@@ -110,42 +168,85 @@ final class QuestionDetailViewModel: ObservableObject {
         }
     }
     
-    func upvoteQuestion(question: Question) async {
-        // Simple local increment
-        let newCount = (updatedQuestionvotes ?? question.upvotes) + 1
-        await MainActor.run {
-            self.updatedQuestionvotes = newCount
+    func upvoteQuestion(question: Question, auth: AuthViewModel) async {
+        // Check if already voted
+        if hasVotedOnQuestion {
+            print("⚠️ User has already voted on this question")
+            return
         }
-
-        // 🔧 TODO: Optional Airtable update later
-        // try? await airtable.updateUpvotes(for: question.id, to: newCount)
         
-//        func updateUpvotes(for recordId: String, to newCount: Int) async throws {
-//            let url = URL(string: "https://api.airtable.com/v0/\(config.baseId)/Questions/\(recordId)")!
-//            var request = URLRequest(url: url)
-//            request.httpMethod = "PATCH"
-//            request.setValue("Bearer \(config.apiKey)", forHTTPHeaderField: "Authorization")
-//            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-//
-//            let body = ["fields": ["Upvotes": newCount]]
-//            request.httpBody = try JSONSerialization.data(withJSONObject: body)
-//
-//            let (_, response) = try await URLSession.shared.data(for: request)
-//            guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-//                throw URLError(.badServerResponse)
-//            }
-//        }
+        await MainActor.run {
+            isVoting = true
+        }
+        
+        do {
+            // Resolve user ID
+            let userId = try await resolveAuthorId(from: auth)
+            
+            // Create vote in Airtable (this also updates the upvote count)
+            try await airtable.createVote(
+                userId: userId,
+                targetType: "Question",
+                targetId: question.id
+            )
+            
+            // Update local state
+            let newCount = (updatedQuestionvotes ?? question.upvotes) + 1
+            await MainActor.run {
+                self.updatedQuestionvotes = newCount
+                self.hasVotedOnQuestion = true
+                self.isVoting = false
+            }
+            
+            // Reload question to get updated count from server
+            // (In a real app, you might want to refresh the question from the feed)
+        } catch {
+            print("❌ Error upvoting question: \(error)")
+            await MainActor.run {
+                self.isVoting = false
+            }
+        }
     }
     
-    func upvoteAnswer(_ answer: Answer) async {
-        let current = updatedAnswerVotes[answer.id] ?? answer.upvotes
-        let newCount = current + 1
-        await MainActor.run {
-            self.updatedAnswerVotes[answer.id] = newCount
+    func upvoteAnswer(_ answer: Answer, auth: AuthViewModel) async {
+        // Check if already voted
+        if hasVotedOnAnswers[answer.id] == true {
+            print("⚠️ User has already voted on this answer")
+            return
         }
-
-        // Optional: Uncomment when ready to save to Airtable
-        // try? await airtable.updateUpvotes(for: answer.id, to: newCount, in: "Answers")
+        
+        await MainActor.run {
+            isVoting = true
+        }
+        
+        do {
+            // Resolve user ID
+            let userId = try await resolveAuthorId(from: auth)
+            
+            // Create vote in Airtable (this also updates the upvote count)
+            try await airtable.createVote(
+                userId: userId,
+                targetType: "Answer",
+                targetId: answer.id
+            )
+            
+            // Update local state
+            let current = updatedAnswerVotes[answer.id] ?? answer.upvotes
+            let newCount = current + 1
+            await MainActor.run {
+                self.updatedAnswerVotes[answer.id] = newCount
+                self.hasVotedOnAnswers[answer.id] = true
+                self.isVoting = false
+            }
+            
+            // Reload answers to get updated counts
+            await fetchAnswers(for: question)
+        } catch {
+            print("❌ Error upvoting answer: \(error)")
+            await MainActor.run {
+                self.isVoting = false
+            }
+        }
     }
 
 }
