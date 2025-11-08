@@ -12,21 +12,23 @@ import Combine
 final class FeedViewModel: ObservableObject {
 	@Published var isLoading: Bool = false
 	@Published var errorMessage: String? = nil
-	@Published var questions: [Question] = []
+    @Published var questions: [Question] = []
 
-	private lazy var airtable: AirtableService? = {
-	    guard let config = AirtableConfig() else {
-	        return nil
-	    }
-	    return AirtableService(config: config)
-	}()
+    private lazy var airtableServiceInternal: AirtableService? = {
+        guard let config = AirtableConfig() else {
+            return nil
+        }
+        return AirtableService(config: config)
+    }()
+
+    var airtableService: AirtableService? { airtableServiceInternal }
 
 	func loadQuestions() {
 		isLoading = true
 		errorMessage = nil
 
-		Task {
-			guard let airtable = self.airtable else {
+        Task {
+            guard let airtable = self.airtableServiceInternal else {
 				self.errorMessage = "Airtable not configured. Check Info.plist keys."
 				self.isLoading = false
 				return
@@ -41,5 +43,24 @@ final class FeedViewModel: ObservableObject {
 			}
 		}
 	}
+
+    func prepend(_ question: Question) {
+        if let existingIndex = questions.firstIndex(where: { $0.id == question.id }) {
+            questions.remove(at: existingIndex)
+        }
+        questions.insert(question, at: 0)
+    }
+        
+        // Refresh the feed from Airtable after posting (keeps order/metadata authoritative).
+    func reload(using service: AirtableService) async {
+        do {
+            let latest = try await service.fetchQuestions()
+            self.questions = latest
+        } catch {
+            // Optional: surface/log non-blocking error
+            // print("Reload failed: \(error)")
+        }
+    }
+    
 }
 

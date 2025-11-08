@@ -12,12 +12,14 @@ struct ToguApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var router = Router()
     @StateObject private var auth = AuthViewModel()
+    @StateObject var feed = FeedViewModel()
 
     var body: some Scene {
         WindowGroup {
             RootRouter()
                 .environmentObject(router)
                 .environmentObject(auth)
+                .environmentObject(feed)
         }
     }
 }

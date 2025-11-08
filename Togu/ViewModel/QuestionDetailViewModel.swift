@@ -15,6 +15,8 @@ final class QuestionDetailViewModel: ObservableObject {
     @Published var errorMessage: String?
     @Published var updatedQuestionvotes: Int? = nil
     @Published var updatedAnswerVotes: [String: Int] = [:]
+    @Published var isSubmittingAnswer = false
+    @Published var submitAnswerError: String?
     
     
     private let airtable: AirtableService
@@ -144,44 +146,6 @@ final class QuestionDetailViewModel: ObservableObject {
 
         // Optional: Uncomment when ready to save to Airtable
         // try? await airtable.updateUpvotes(for: answer.id, to: newCount, in: "Answers")
-    }
-    
-    // MARK: - Submit Answer
-    @Published var isSubmittingAnswer = false
-    @Published var submitAnswerError: String?
-    
-    func submitAnswer(text: String, authorId: String) async {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            await MainActor.run { self.submitAnswerError = "Answer text cannot be empty." }
-            return
-        }
-
-        await MainActor.run {
-            self.isSubmittingAnswer = true
-            self.submitAnswerError = nil
-        }
-
-        do {
-            try await airtable.createAnswer(for: question, text: trimmed, authorId: authorId)
-            await fetchAnswers(for: question)
-            await MainActor.run { self.isSubmittingAnswer = false }
-        } catch {
-            let friendly: String
-            if let svcErr = error as? AirtableService.ServiceError {
-                switch svcErr {
-                case .missingAuthorId: friendly = "Missing author identity. Please sign out and sign in again."   // NEW
-                case .invalidQuestionId: friendly = "Invalid question id. Please refresh and try again."          // NEW
-                default: friendly = "Failed to submit answer."
-                }
-            } else {
-                friendly = "Failed to submit answer: \(error.localizedDescription)"
-            }
-            await MainActor.run {
-                self.isSubmittingAnswer = false
-                self.submitAnswerError = friendly // NEW
-            }
-        }
     }
 
 }

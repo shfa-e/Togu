@@ -26,6 +26,7 @@ final class Router: ObservableObject {
 struct RootRouter: View {
     @EnvironmentObject var router: Router
     @EnvironmentObject var auth: AuthViewModel
+    @EnvironmentObject var feed: FeedViewModel
 
     var body: some View {
         ZStack {
@@ -39,6 +40,8 @@ struct RootRouter: View {
                     .transition(.opacity)
             case .home:
                 HomeView()
+                    .environmentObject(auth)
+                    .environmentObject(feed)
                     .transition(.opacity.combined(with: .move(edge: .trailing)))
             }
         }

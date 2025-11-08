@@ -65,32 +65,5 @@ struct AnswerFormView: View {
         }
     }
     
-    private func submitAnswer() {
-        let authorName = extractAuthorName()
-        Task {
-            await vm.submitAnswer(text: answerText, authorId: auth.airtableUserId ?? "")
-            if vm.submitAnswerError == nil {
-                dismiss()
-            }
-        }
-    }
-    
-    private func extractAuthorName() -> String {
-        switch auth.state {
-        case .signedIn(let userInfo):
-            if let name = userInfo["name"] as? String {
-                return name
-            }
-            if let givenName = userInfo["given_name"] as? String {
-                return givenName
-            }
-            if let email = userInfo["email"] as? String {
-                return email
-            }
-            return "Anonymous"
-        default:
-            return "Anonymous"
-        }
-    }
 }
 

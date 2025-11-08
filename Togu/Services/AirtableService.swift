@@ -16,6 +16,12 @@ final class AirtableService {
         self.urlSession = urlSession
     }
     
+    struct NewQuestionImage {
+        let data: Data
+        let filename: String
+        let mimeType: String
+    }
+
     enum ServiceError: Error {
         case url
         case http
@@ -23,6 +29,7 @@ final class AirtableService {
         case server
         case missingAuthorId
         case invalidQuestionId
+        case missingImageData
     }
 
     
@@ -147,6 +154,71 @@ final class AirtableService {
 
         print("✅ Successfully created answer")
     }
+
+    // MARK: - Create Question
+    func createQuestion(title: String,
+                        body: String,
+                        tags: [String],
+                        authorId: String,
+                        image: NewQuestionImage?) async throws -> Question {
+        guard !authorId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw ServiceError.missingAuthorId
+        }
+
+        guard let url = URL(string: "https://api.airtable.com/v0/\(config.baseId)/\(config.questionsTable)") else {
+            throw ServiceError.url
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(config.apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        var fields: [String: Any] = [
+            "Title": title,
+            "Body": body,
+            "Author": [authorId],
+            "Upvotes": 0
+        ]
+
+        if !tags.isEmpty {
+            fields["Tags"] = tags
+        }
+
+        if let image {
+            let base64 = image.data.base64EncodedString()
+            fields["Image"] = [[
+                "data": base64,
+                "filename": image.filename,
+                "type": image.mimeType
+            ]]
+        }
+
+        let payload: [String: Any] = ["fields": fields]
+
+        if let dbg = try? JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted]),
+           let dump = String(data: dbg, encoding: .utf8) {
+            print("📤 POST /Questions body:\n\(dump)")
+        }
+
+        request.httpBody = try JSONSerialization.data(withJSONObject: payload, options: [])
+
+        let (data, resp) = try await URLSession.shared.data(for: request)
+        if let http = resp as? HTTPURLResponse {
+            print("📡 Airtable createQuestion status:", http.statusCode)
+            if let body = String(data: data, encoding: .utf8) {
+                print("🧩 Airtable response body:\n\(body)")
+            }
+            guard (200..<300).contains(http.statusCode) else {
+                throw URLError(.badServerResponse)
+            }
+        }
+
+        let record = try JSONDecoder().decode(AirtableRecord<QuestionFields>.self, from: data)
+        let fallbackId = record.id ?? UUID().uuidString
+        let createdTime = record.createdTime ?? ISO8601DateFormatter().string(from: Date())
+        return record.fields.toQuestion(fallbackId: fallbackId, createdTime: createdTime)
+    }
     
     
     // MARK: - Helper: Parse Airtable date safely
@@ -192,66 +264,66 @@ final class AirtableService {
     }
 
     // Return the Airtable Users recordId for a given email, or nil if not found.
-        func fetchUserRecordId(byEmail email: String) async throws -> String? { // NEW
-            var comps = URLComponents()
-            comps.scheme = "https"
-            comps.host = "api.airtable.com"
-            comps.path = "/v0/\(config.baseId)/Users"
-            let formula = "LOWER({Email})='\(email.lowercased())'"
-            comps.queryItems = [ URLQueryItem(name: "filterByFormula", value: formula) ]
+    func fetchUserRecordId(byEmail email: String) async throws -> String? {
+        var comps = URLComponents()
+        comps.scheme = "https"
+        comps.host = "api.airtable.com"
+        comps.path = "/v0/\(config.baseId)/Users"
+        let formula = "LOWER({Email})='\(email.lowercased())'"
+        comps.queryItems = [ URLQueryItem(name: "filterByFormula", value: formula) ]
 
-            guard let url = comps.url else { throw ServiceError.url }
+        guard let url = comps.url else { throw ServiceError.url }
 
-            var req = URLRequest(url: url)
-            req.httpMethod = "GET"
-            req.setValue("Bearer \(config.apiKey)", forHTTPHeaderField: "Authorization")
+        var req = URLRequest(url: url)
+        req.httpMethod = "GET"
+        req.setValue("Bearer \(config.apiKey)", forHTTPHeaderField: "Authorization")
 
-            let (data, resp) = try await urlSession.data(for: req)
-            guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-                print("❌ Failed to fetch user by email: \(email)")
-                return nil
-            }
-
-            let decoded = try JSONDecoder().decode(AirtableListResponse<UserFields>.self, from: data)
-            return decoded.records.first?.id
+        let (data, resp) = try await urlSession.data(for: req)
+        guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            print("❌ Failed to fetch user by email: \(email)")
+            return nil
         }
 
-        // Create a Users record if the email isn't found, then return its recordId.
-        func createUserIfMissing(name: String, email: String) async throws -> String { // NEW
-            if let existing = try await fetchUserRecordId(byEmail: email) {
-                print("✅ Found existing Airtable user for \(email)")
-                return existing
-            }
+        let decoded = try JSONDecoder().decode(AirtableListResponse<UserFields>.self, from: data)
+        return decoded.records.first?.id
+    }
 
-            guard let url = URL(string: "https://api.airtable.com/v0/\(config.baseId)/Users") else {
-                throw ServiceError.url
-            }
+    // Create a Users record if the email isn't found, then return its recordId.
+    func createUserIfMissing(name: String, email: String) async throws -> String {
+        if let existing = try await fetchUserRecordId(byEmail: email) {
+            print("✅ Found existing Airtable user for \(email)")
+            return existing
+        }
 
-            var req = URLRequest(url: url)
-            req.httpMethod = "POST"
-            req.setValue("Bearer \(config.apiKey)", forHTTPHeaderField: "Authorization")
-            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        guard let url = URL(string: "https://api.airtable.com/v0/\(config.baseId)/Users") else {
+            throw ServiceError.url
+        }
 
-            let body: [String: Any] = [
-                "fields": [
-                    "Name": name,
-                    "Email": email
-                ]
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("Bearer \(config.apiKey)", forHTTPHeaderField: "Authorization")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let body: [String: Any] = [
+            "fields": [
+                "Name": name,
+                "Email": email
             ]
+        ]
 
-            req.httpBody = try JSONSerialization.data(withJSONObject: body, options: [])
+        req.httpBody = try JSONSerialization.data(withJSONObject: body, options: [])
 
-            let (data, resp) = try await urlSession.data(for: req)
-            guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-                print("❌ Failed to create new user for \(email)")
-                throw ServiceError.http
-            }
-
-            let created = try JSONDecoder().decode(AirtableCreateResponse<UserFields>.self, from: data)
-            let id = created.id ?? ""
-            print("✅ Created new Airtable user record for \(email) → \(id)")
-            return id
+        let (data, resp) = try await urlSession.data(for: req)
+        guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            print("❌ Failed to create new user for \(email)")
+            throw ServiceError.http
         }
+
+        let created = try JSONDecoder().decode(AirtableCreateResponse<UserFields>.self, from: data)
+        let id = created.id ?? ""
+        print("✅ Created new Airtable user record for \(email) → \(id)")
+        return id
+    }
     
 }
 

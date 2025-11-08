@@ -12,9 +12,16 @@ import Combine
 struct HomeView: View {
     @EnvironmentObject var auth: AuthViewModel
     @EnvironmentObject var router: Router
+    
+    @StateObject var feed = FeedViewModel()
 
 	@State private var isSigningOut = false
-	@StateObject private var feed = FeedViewModel()
+    @State private var showAskQuestion = false
+    @State private var showConfigAlert = false
+    @State private var airtableService: AirtableService? = {
+        guard let config = AirtableConfig() else { return nil }
+        return AirtableService(config: config)
+    }()
 
     var body: some View {
 
@@ -56,17 +63,24 @@ struct HomeView: View {
 							)
 						}
 						.listRowInsets(.none)
-					} else {
+					} else if let service = airtableService {
 						ForEach(feed.questions) { question in
-							NavigationLink(
-								destination: QuestionDetailView(
-									question: question,
-                                    airtable: AirtableService(config: AirtableConfig()!)
-								)
-							) {
+							NavigationLink {
+								QuestionDetailView(question: question, airtable: service)
+									.environmentObject(auth)
+							} label: {
 								QuestionRow(question: question)
 							}
 						}
+					} else {
+						VStack(spacing: 12) {
+							Image(systemName: "exclamationmark.triangle")
+								.font(.largeTitle)
+								.foregroundStyle(.orange)
+							Text("Airtable configuration is missing. Add your keys to Info.plist to load questions.")
+								.multilineTextAlignment(.center)
+						}
+						.padding(.vertical, 32)
 					}
 				}
 			}
@@ -74,8 +88,49 @@ struct HomeView: View {
 			.refreshable { feed.loadQuestions() }
 			.navigationTitle("Home")
 			.onAppear { feed.loadQuestions() }
-			.toolbar { signOutToolbar }
+			.toolbar {
+				ToolbarItem(placement: .topBarTrailing) {
+					Button {
+						if airtableService == nil {
+							showConfigAlert = true
+						} else {
+							showAskQuestion = true
+						}
+					} label: {
+						Label("Ask", systemImage: "plus")
+					}
+					.accessibilityIdentifier("home.askQuestion")
+					.disabled(airtableService == nil)
+				}
+				signOutToolbar()
+			}
 		}
+        .sheet(isPresented: $showAskQuestion) {
+            if let service = airtableService {
+                AskQuestionView(
+                    viewModel: {
+                        let vm = AskQuestionViewModel(airtable: service)
+                        vm.onCreated = { question in
+                            feed.prepend(question)
+                            if let service = airtableService {
+                                Task { await feed.reload(using: service) }
+                            }
+                        }
+                        return vm
+                    }()
+                )
+                .environmentObject(auth)
+                .environmentObject(feed)
+            } else {
+                Text("Airtable not configured")
+                    .padding()
+            }
+        }
+        .alert("Airtable Not Configured", isPresented: $showConfigAlert) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("Add AIRTABLE_KEY and AIRTABLE_BASE_ID to Info.plist before posting questions.")
+        }
     }
 
 	// MARK: - Helpers
@@ -103,7 +158,7 @@ struct HomeView: View {
     }
 
 	@ToolbarContentBuilder
-	private var signOutToolbar: some ToolbarContent {
+	private func signOutToolbar() -> some ToolbarContent {
 		ToolbarItem(placement: .topBarTrailing) {
 			Menu {
 				if let info = extractUserInfo() {
@@ -160,3 +215,32 @@ private struct QuestionRow: View {
 		.padding(.vertical, 8)
 	}
 }
+
+private struct AskQuestionSheet: View {
+    let service: AirtableService
+    @EnvironmentObject var auth: AuthViewModel
+    @ObservedObject var feed: FeedViewModel
+    @StateObject private var viewModel: AskQuestionViewModel
+    
+    init(service: AirtableService, feed: FeedViewModel) {
+        self.service = service
+        self._feed = ObservedObject(initialValue: feed)
+        // Initialize the view model here with the provided service
+        let vm = AskQuestionViewModel(airtable: service)
+        _viewModel = StateObject(wrappedValue: vm)
+    }
+    
+    var body: some View {
+        AskQuestionView(viewModel: viewModel)
+            .environmentObject(auth)
+            .onAppear {
+                viewModel.onCreated = { [weak feed] question in
+                    // Show it instantly
+                    feed?.prepend(question)
+                    // Then quietly reload from the source to keep things authoritative/sorted
+                    Task { await feed?.reload(using: service) }
+                }
+            }
+    }
+}
+
