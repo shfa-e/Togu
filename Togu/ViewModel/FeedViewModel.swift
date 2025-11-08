@@ -11,15 +11,33 @@ import Combine
 @MainActor
 final class FeedViewModel: ObservableObject {
     @Published var isLoading: Bool = false
+    @Published var isLoadingMore: Bool = false
     @Published var errorMessage: String? = nil
     @Published var questions: [Question] = []
     @Published var updatedQuestionVotes: [String: Int] = [:]
     @Published var hasVotedOnQuestions: [String: Bool] = [:]
     @Published var isVoting = false
     
+    // Pagination state
+    private var nextOffset: String? = nil
+    @Published var hasMorePages: Bool = true
+    
     // Search and filter state
-    @Published var searchText: String = ""
+    @Published var searchText: String = "" {
+        didSet {
+            // Debounce search
+            searchDebounceTask?.cancel()
+            searchDebounceTask = Task {
+                try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+                guard !Task.isCancelled else { return }
+                await performSearch()
+            }
+        }
+    }
     @Published var selectedTag: String? = nil
+    
+    private var searchDebounceTask: Task<Void, Never>?
+    private var authForSearch: AuthViewModel?
 
     private lazy var airtableServiceInternal: AirtableService? = {
         guard let config = AirtableConfig() else { return nil }
@@ -29,70 +47,146 @@ final class FeedViewModel: ObservableObject {
     var airtableService: AirtableService? { airtableServiceInternal }
 
     // Load with auth so we can hydrate vote state per question
-    func loadQuestions(auth: AuthViewModel) {
-        isLoading = true
+    func loadQuestions(auth: AuthViewModel, reset: Bool = true) {
+        authForSearch = auth
+        if reset {
+            isLoading = true
+            nextOffset = nil
+            hasMorePages = true
+            questions = []
+        } else {
+            isLoadingMore = true
+        }
         errorMessage = nil
 
         Task {
-            guard let airtable = self.airtableServiceInternal else {
-                self.errorMessage = "Airtable not configured. Check Info.plist keys."
-                self.isLoading = false
-                return
-            }
-            do {
-                // Use search and tag filters
-                var items = try await airtable.fetchQuestions(
-                    searchText: searchText.isEmpty ? nil : searchText,
-                    selectedTag: selectedTag
-                )
-                
-                // Enrich questions with author details (answer counts loaded separately in QuestionCardView)
-                // Use TaskGroup for parallel fetching
-                await withTaskGroup(of: (Int, URL?, Int?).self) { group in
-                    for i in 0..<items.count {
-                        let question = items[i]
-                        group.addTask {
-                            if let authorId = question.authorId {
-                                do {
-                                    let (profileURL, level) = try await airtable.getAuthorDetails(authorId: authorId)
-                                    return (i, profileURL, level)
-                                } catch {
-                                    print("⚠️ Failed to get author details for \(authorId): \(error)")
-                                    return (i, nil, nil)
-                                }
+            await loadQuestionsWithRetry(auth: auth, reset: reset)
+        }
+    }
+    
+    func performSearch() async {
+        guard let auth = authForSearch else { return }
+        // Only perform search if user is signed in
+        guard case .signedIn = auth.state else { return }
+        await loadQuestionsWithRetry(auth: auth, reset: true)
+    }
+    
+    func selectTag(_ tag: String, auth: AuthViewModel) {
+        if tag == "All" {
+            selectedTag = nil
+        } else {
+            selectedTag = (selectedTag == tag) ? nil : tag
+        }
+        loadQuestions(auth: auth)
+    }
+    
+    var isEmptyState: Bool {
+        questions.isEmpty
+    }
+    
+    var emptyStateTitle: String {
+        searchText.isEmpty && selectedTag == nil
+            ? "No questions yet"
+            : "No questions found"
+    }
+    
+    var emptyStateMessage: String {
+        searchText.isEmpty && selectedTag == nil
+            ? "Be the first to ask a question!"
+            : "Try a different search term or filter"
+    }
+    
+    var shouldShowEmptyStateAction: Bool {
+        searchText.isEmpty && selectedTag == nil
+    }
+    
+    private func loadQuestionsWithRetry(auth: AuthViewModel, reset: Bool, retryCount: Int = 0) async {
+        guard let airtable = self.airtableServiceInternal else {
+            self.errorMessage = "Airtable not configured. Check Info.plist keys."
+            self.isLoading = false
+            self.isLoadingMore = false
+            return
+        }
+        
+        do {
+            // Use search and tag filters with pagination
+            let result = try await airtable.fetchQuestions(
+                searchText: searchText.isEmpty ? nil : searchText,
+                selectedTag: selectedTag,
+                offset: reset ? nil : nextOffset
+            )
+            
+            var items = result.questions
+            
+            // Enrich questions with author details (answer counts loaded separately in QuestionCardView)
+            // Use TaskGroup for parallel fetching
+            await withTaskGroup(of: (Int, URL?, Int?).self) { group in
+                for i in 0..<items.count {
+                    let question = items[i]
+                    group.addTask {
+                        if let authorId = question.authorId {
+                            do {
+                                let (profileURL, level) = try await airtable.getAuthorDetails(authorId: authorId)
+                                return (i, profileURL, level)
+                            } catch {
+                                print("⚠️ Failed to get author details for \(authorId): \(error)")
+                                return (i, nil, nil)
                             }
-                            return (i, nil, nil)
                         }
-                    }
-                    
-                    for await (index, profileURL, level) in group {
-                        items[index].authorProfilePictureURL = profileURL
-                        items[index].authorLevel = level
+                        return (i, nil, nil)
                     }
                 }
                 
-                self.questions = items
-
-                // Hydrate per-question vote state for this user
-                if let userId = try? await resolveAuthorId(from: auth) {
-                    for i in 0..<self.questions.count {
-                        let q = self.questions[i]
-                        let voted = try await airtable.hasUserVoted(
-                            userId: userId,
-                            targetType: "Question",
-                            targetId: q.id
-                        )
-                        self.questions[i].userHasVoted = voted
-                        self.hasVotedOnQuestions[q.id] = voted
-                    }
+                for await (index, profileURL, level) in group {
+                    items[index].authorProfilePictureURL = profileURL
+                    items[index].authorLevel = level
                 }
+            }
+            
+            if reset {
+                self.questions = items
+            } else {
+                self.questions.append(contentsOf: items)
+            }
+            
+            // Update pagination state
+            self.nextOffset = result.nextOffset
+            self.hasMorePages = result.nextOffset != nil
 
+            // Hydrate per-question vote state for this user
+            if let userId = try? await resolveAuthorId(from: auth) {
+                let startIndex = reset ? 0 : self.questions.count - items.count
+                for i in startIndex..<self.questions.count {
+                    let q = self.questions[i]
+                    let voted = try await airtable.hasUserVoted(
+                        userId: userId,
+                        targetType: "Question",
+                        targetId: q.id
+                    )
+                    self.questions[i].userHasVoted = voted
+                    self.hasVotedOnQuestions[q.id] = voted
+                }
+            }
+
+            self.isLoading = false
+            self.isLoadingMore = false
+        } catch {
+            // Retry logic with exponential backoff
+            if retryCount < 3 {
+                let delay = pow(2.0, Double(retryCount)) // 1s, 2s, 4s
+                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                await loadQuestionsWithRetry(auth: auth, reset: reset, retryCount: retryCount + 1)
+            } else {
+                self.errorMessage = "Failed to load questions. Please check your connection."
                 self.isLoading = false
-            } catch {
-                self.errorMessage = "Failed to load questions."
-                self.isLoading = false
+                self.isLoadingMore = false
             }
         }
+    }
+    
+    func loadMoreQuestions(auth: AuthViewModel) {
+        guard hasMorePages && !isLoadingMore && !isLoading else { return }
+        loadQuestions(auth: auth, reset: false)
     }
 
     func prepend(_ question: Question) {
@@ -105,10 +199,11 @@ final class FeedViewModel: ObservableObject {
     // Refresh from Airtable and (optionally) re-hydrate votes
     func reload(using service: AirtableService, auth: AuthViewModel? = nil) async {
         do {
-            var latest = try await service.fetchQuestions(
+            let result = try await service.fetchQuestions(
                 searchText: searchText.isEmpty ? nil : searchText,
                 selectedTag: selectedTag
             )
+            var latest = result.questions
 
             if let auth = auth, let userId = try? await resolveAuthorId(from: auth) {
                 for i in 0..<latest.count {
@@ -124,8 +219,11 @@ final class FeedViewModel: ObservableObject {
             }
 
             self.questions = latest
+            self.nextOffset = result.nextOffset
+            self.hasMorePages = result.nextOffset != nil
         } catch {
             // Optional: log non-blocking error
+            print("⚠️ Failed to reload questions: \(error)")
         }
     }
 

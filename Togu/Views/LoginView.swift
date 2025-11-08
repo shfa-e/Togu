@@ -10,9 +10,12 @@ import SwiftUI
 struct LoginView: View {
     @EnvironmentObject var auth: AuthViewModel
     @EnvironmentObject var router: Router
+    @StateObject private var viewModel: LoginViewModel
 
-    @State private var isAnimating = false
-    @State private var meshAnimation = false
+    init() {
+        let tempAuth = AuthViewModel()
+        _viewModel = StateObject(wrappedValue: LoginViewModel(auth: tempAuth))
+    }
 
     var body: some View {
         ZStack {
@@ -23,7 +26,7 @@ struct LoginView: View {
                     height: 3,
                     points: [
                         [0.0, 0.0], [0.5, 0], [1.0, 0.0],
-                        [0.0, 0.5], [meshAnimation ? 0.1 : 0.9, 0.5], [1.0, 0.5],
+                        [0.0, 0.5], [viewModel.meshAnimation ? 0.1 : 0.9, 0.5], [1.0, 0.5],
                         [0.0, 1.0], [0.5, 1.0], [1.0, 1.0]
                     ],
                     colors: [
@@ -37,7 +40,7 @@ struct LoginView: View {
                 .ignoresSafeArea()
                 .onAppear {
                     withAnimation(.easeInOut(duration: 5).repeatForever(autoreverses: true)) {
-                        meshAnimation.toggle()
+                        viewModel.meshAnimation.toggle()
                     }
                 }
             } else {
@@ -63,7 +66,7 @@ struct LoginView: View {
                         .padding(.bottom, 20)
 
                     // Error Message
-                    if case .error(let errorMsg) = auth.state {
+                    if let errorMsg = viewModel.errorMessage {
                         errorMessage(errorMsg)
                             .padding(.horizontal, 20)
                             .padding(.top, 12)
@@ -75,8 +78,9 @@ struct LoginView: View {
             }
         }
         .onAppear {
+            viewModel.updateAuth(auth)
             withAnimation(.easeOut(duration: 0.6)) {
-                isAnimating = true
+                viewModel.startAnimations()
             }
         }
     }
@@ -95,9 +99,9 @@ struct LoginView: View {
                 .font(.system(size: 64, weight: .bold, design: .rounded))
                 .kerning(-1.2)
                 .foregroundColor(.clear)
-                .opacity(isAnimating ? 1.0 : 0.0)
-                .offset(y: isAnimating ? 0 : 20)
-                .animation(.easeOut(duration: 0.6), value: isAnimating)
+                .opacity(viewModel.isAnimating ? 1.0 : 0.0)
+                .offset(y: viewModel.isAnimating ? 0 : 20)
+                .animation(.easeOut(duration: 0.6), value: viewModel.isAnimating)
                 .overlay(
                     LinearGradient(
                         colors: [
@@ -142,18 +146,18 @@ struct LoginView: View {
                 .padding(.horizontal, 40)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .opacity(isAnimating ? 1.0 : 0.0)
-        .offset(y: isAnimating ? 0 : 20)
-        .animation(.easeOut(duration: 0.6), value: isAnimating)
+        .opacity(viewModel.isAnimating ? 1.0 : 0.0)
+        .offset(y: viewModel.isAnimating ? 0 : 20)
+        .animation(.easeOut(duration: 0.6), value: viewModel.isAnimating)
     }
 
     // MARK: - Sign In Button
     private var signInButton: some View {
         Button {
-            auth.signIn()
+            viewModel.signIn()
         } label: {
             HStack(spacing: 12) {
-                if authIsBusy {
+                if viewModel.authIsBusy {
                     ProgressView()
                         .tint(.white)
                         .scaleEffect(1.1)
@@ -162,7 +166,7 @@ struct LoginView: View {
                         .font(.system(size: 18, weight: .semibold))
                 }
 
-                Text(authIsBusy ? "Signing in..." : "Sign in with IDServe")
+                Text(viewModel.authIsBusy ? "Signing in..." : "Sign in with IDServe")
                     .font(.system(size: 17, weight: .semibold))
             }
             .foregroundColor(.white)
@@ -170,7 +174,7 @@ struct LoginView: View {
             .padding(.vertical, 18)
             .background(
                 Group {
-                    if authIsBusy {
+                    if viewModel.authIsBusy {
                         LinearGradient(
                             gradient: Gradient(colors: [
                                 Color.toguDisabled,
@@ -193,16 +197,16 @@ struct LoginView: View {
             )
             .cornerRadius(16)
             .shadow(
-                color: authIsBusy ? Color.clear : Color.toguPrimary.opacity(0.3),
+                color: viewModel.authIsBusy ? Color.clear : Color.toguPrimary.opacity(0.3),
                 radius: 12,
                 x: 0,
                 y: 6
             )
         }
-        .disabled(authIsBusy)
-        .scaleEffect(isAnimating ? 1.0 : 0.95)
-        .opacity(isAnimating ? 1.0 : 0.0)
-        .animation(.easeOut(duration: 0.5), value: isAnimating)
+        .disabled(viewModel.authIsBusy)
+        .scaleEffect(viewModel.isAnimating ? 1.0 : 0.95)
+        .opacity(viewModel.isAnimating ? 1.0 : 0.0)
+        .animation(.easeOut(duration: 0.5), value: viewModel.isAnimating)
     }
 
     // MARK: - Error Message
@@ -229,11 +233,6 @@ struct LoginView: View {
         )
     }
 
-    // MARK: - Computed Properties
-    private var authIsBusy: Bool {
-        if case .signingIn = auth.state { return true }
-        return false
-    }
 }
 
 #Preview {

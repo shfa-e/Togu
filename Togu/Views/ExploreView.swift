@@ -13,6 +13,15 @@ struct ExploreView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 24) {
+                Spacer()
+                Spacer()
+                Spacer()
+                Spacer()
+                Spacer()
+            
+                Spacer()
+                Spacer()
+                
                 Image(systemName: "safari")
                     .font(.system(size: 60))
                     .foregroundStyle(Color.toguPrimary)
@@ -21,17 +30,23 @@ struct ExploreView: View {
                     .font(.title)
                     .bold()
                 
-                Text("Discover trending questions, popular topics, and more!")
+                Text("Coming Soon... we're excited to continue this journey with the academy.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal)
+
             }
             .padding(.top, 100)
         }
-        .background(Color(hex: "#F5F5F5").ignoresSafeArea())
-        .navigationTitle("Explore")
-        .navigationBarTitleDisplayMode(.inline)
+        .ignoresSafeArea()
     }
 }
 
+
+#Preview {
+    NavigationStack {
+        ExploreView()
+            .environmentObject(AuthViewModel())
+    }
+}

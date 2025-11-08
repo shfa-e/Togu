@@ -18,6 +18,7 @@ final class AskQuestionViewModel: ObservableObject {
     @Published var imageFilename: String?
     @Published var isSubmitting: Bool = false
     @Published var errorMessage: String?
+    @Published var selectedImageName: String?
     // Predefined tags from Airtable database
     let availableTags: [String] = [
         "iOS", "Frontend", "Backend", "Swift", "UX", 
@@ -77,23 +78,36 @@ final class AskQuestionViewModel: ObservableObject {
     func setImage(data: Data?, filename: String?) {
         imageData = data
         imageFilename = filename
+        selectedImageName = filename
     }
 
     func clearImage() {
         imageData = nil
         imageFilename = nil
+        selectedImageName = nil
+    }
+    
+    func setPickedImage(data: Data?, filename: String?) {
+        imageData = data
+        imageFilename = filename
+        selectedImageName = filename
     }
 
     func submit(auth: AuthViewModel) async -> Bool {
+        // Append code snippet to body if it exists
+        var finalBody = body.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let code = codeSnippet, !code.trimmingCharacters(in: .whitespaces).isEmpty {
+            finalBody += "\n\n```\n\(code)\n```"
+        }
+        
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        let trimmedBody = body.trimmingCharacters(in: .whitespacesAndNewlines)
 
         guard !trimmedTitle.isEmpty else {
             errorMessage = "Title cannot be empty."
             return false
         }
 
-        guard !trimmedBody.isEmpty else {
+        guard !finalBody.isEmpty else {
             errorMessage = "Description cannot be empty."
             return false
         }
@@ -106,7 +120,7 @@ final class AskQuestionViewModel: ObservableObject {
             let attachment = makeImageAttachment()
             let question = try await airtable.createQuestion(
                 title: trimmedTitle,
-                body: trimmedBody,
+                body: finalBody,
                 tags: tags,
                 authorId: authorId,
                 image: attachment

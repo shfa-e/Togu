@@ -34,6 +34,90 @@ final class ProfileViewModel: ObservableObject {
         self.auth = auth
     }
     
+    // MARK: - Computed Properties
+    
+    var levelInfo: LevelInfo {
+        LevelInfo.calculate(from: points)
+    }
+    
+    var skills: [Skill] {
+        var tagCounts: [String: Int] = [:]
+        
+        // Count tags from questions
+        for question in userQuestions {
+            for tag in question.tags {
+                tagCounts[tag, default: 0] += 1
+            }
+        }
+        
+        // Sort by count and take top 5
+        let sortedTags = tagCounts.sorted { $0.value > $1.value }.prefix(5)
+        
+        return sortedTags.enumerated().map { index, pair in
+            let level = min(5, pair.value) // Cap level at 5
+            return Skill(
+                name: pair.key,
+                level: level,
+                isHighlighted: index < 2
+            )
+        }
+    }
+    
+    var recentActivities: [Activity] {
+        var activities: [Activity] = []
+        
+        // Add questions
+        for question in userQuestions.prefix(3) {
+            activities.append(Activity(
+                title: "Asked a question",
+                description: question.title,
+                xpGained: 10,
+                timeAgo: FormattingHelpers.timeAgo(from: question.createdAt),
+                date: question.createdAt,
+                type: .questionAsked
+            ))
+        }
+        
+        // Add answers
+        for answer in userAnswers.prefix(3) {
+            activities.append(Activity(
+                title: "Answered a question",
+                description: String(answer.text.prefix(50)) + (answer.text.count > 50 ? "..." : ""),
+                xpGained: 5,
+                timeAgo: FormattingHelpers.timeAgo(from: answer.createdAt),
+                date: answer.createdAt,
+                type: .answerAccepted
+            ))
+        }
+        
+        // Add badges
+        for badge in badges.prefix(2) {
+            if let date = badge.dateEarned {
+                activities.append(Activity(
+                    title: "Earned a badge",
+                    description: badge.name,
+                    xpGained: 0,
+                    timeAgo: FormattingHelpers.timeAgo(from: date),
+                    date: date,
+                    type: .badgeEarned
+                ))
+            }
+        }
+        
+        // Sort by date (most recent first) and take top 5
+        return activities.sorted { $0.date > $1.date }.prefix(5).map { $0 }
+    }
+    
+    var totalUpvotes: Int {
+        let questionUpvotes = userQuestions.reduce(0) { $0 + $1.upvotes }
+        let answerUpvotes = userAnswers.reduce(0) { $0 + $1.upvotes }
+        return questionUpvotes + answerUpvotes
+    }
+    
+    var shouldLoadProfile: Bool {
+        userName.isEmpty
+    }
+    
     func loadProfile() {
         isLoading = true
         errorMessage = nil

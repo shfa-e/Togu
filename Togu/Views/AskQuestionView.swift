@@ -18,8 +18,6 @@ struct AskQuestionView: View {
 
     // Image picker
     @State private var pickerItem: PhotosPickerItem?
-    @State private var selectedImageData: Data?
-    @State private var selectedImageName: String?
     @State private var showingCodeEditor = false
 
     var body: some View {
@@ -299,7 +297,7 @@ struct AskQuestionView: View {
                 })
             }
             
-            if let data = selectedImageData,
+            if let data = viewModel.imageData,
                let uiImage = UIImage(data: data) {
                 HStack {
                     Image(uiImage: uiImage)
@@ -311,8 +309,6 @@ struct AskQuestionView: View {
                     Spacer()
                     
                     Button {
-                        selectedImageData = nil
-                        selectedImageName = nil
                         viewModel.clearImage()
                     } label: {
                         Image(systemName: "xmark.circle.fill")
@@ -426,10 +422,10 @@ struct AskQuestionView: View {
                         .padding(.vertical, 16)
                         .background(
                             RoundedRectangle(cornerRadius: 12)
-                                .fill(isValid ? Color.toguPrimary : Color.gray)
+                                .fill(viewModel.canSubmit ? Color.toguPrimary : Color.gray)
                         )
                 }
-                .disabled(!isValid)
+                .disabled(!viewModel.canSubmit)
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 12)
@@ -472,57 +468,28 @@ struct AskQuestionView: View {
         .presentationDetents([.medium, .large])
     }
     
-    // MARK: - Computed Properties
-    private var isValid: Bool {
-        !viewModel.title.trimmingCharacters(in: .whitespaces).isEmpty &&
-        !viewModel.body.trimmingCharacters(in: .whitespaces).isEmpty
-    }
-    
     // MARK: - Submit Question
     private func submitQuestion() async {
-        // Assign text fields
-        viewModel.title = viewModel.title.trimmingCharacters(in: .whitespacesAndNewlines)
-        var body = viewModel.body.trimmingCharacters(in: .whitespacesAndNewlines)
-        
-        // Append code snippet to body if it exists
-        if let code = viewModel.codeSnippet, !code.trimmingCharacters(in: .whitespaces).isEmpty {
-            body += "\n\n```\n\(code)\n```"
-        }
-        viewModel.body = body
-
-        // Attach optional image
-        viewModel.setImage(data: selectedImageData, filename: selectedImageName)
-
-        // Directly submit — tags are already selected in the ViewModel
         let ok = await viewModel.submit(auth: auth)
 
         if ok && viewModel.errorMessage == nil {
             dismiss()
         }
     }
-
+    
     // MARK: - Load Picked Image
     private func loadPickedImage(_ item: PhotosPickerItem?) async {
         guard let item else {
-            await MainActor.run {
-                selectedImageData = nil
-                selectedImageName = nil
-            }
+            viewModel.setPickedImage(data: nil, filename: nil)
             return
         }
 
         do {
             let data = try await item.loadTransferable(type: Data.self)
             let name = try await item.loadTransferable(type: String.self) ?? "photo.jpg"
-            await MainActor.run {
-                selectedImageData = data
-                selectedImageName = name
-            }
+            viewModel.setPickedImage(data: data, filename: name)
         } catch {
-            await MainActor.run {
-                selectedImageData = nil
-                selectedImageName = nil
-            }
+            viewModel.setPickedImage(data: nil, filename: nil)
             print("❌ Failed to load picked image:", error)
         }
     }

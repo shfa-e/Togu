@@ -13,6 +13,7 @@ struct HomeView: View {
     @EnvironmentObject var router: Router
     
     @StateObject var feed = FeedViewModel()
+    @StateObject private var homeViewModel: HomeViewModel
 
     @State private var showAskQuestion = false
     @State private var showConfigAlert = false
@@ -21,9 +22,14 @@ struct HomeView: View {
         return AirtableService(config: config)
     }()
     
-    // User progress data
-    @State private var userPoints: Int = 0
-    @State private var isLoadingUserData = false
+    init() {
+        guard let config = AirtableConfig() else {
+            fatalError("Airtable config not found")
+        }
+        let service = AirtableService(config: config)
+        let tempAuth = AuthViewModel()
+        _homeViewModel = StateObject(wrappedValue: HomeViewModel(airtable: service, auth: tempAuth))
+    }
     
     // Available tags for filtering (must match Airtable database tags)
     private let availableTags = [
@@ -57,46 +63,30 @@ struct HomeView: View {
                     
                     // Questions List
 					if feed.isLoading {
-                        VStack(spacing: 16) {
-								ProgressView()
-								Text("Loading questions…")
-                                .font(.subheadline)
-                                .foregroundColor(.toguTextSecondary)
-							}
-                        .padding(.top, 40)
-                        .padding(.bottom, 100)
+                        LoadingView("Loading questions…")
+                            .padding(.top, 40)
+                            .padding(.bottom, 100)
 					} else if let error = feed.errorMessage {
-                        VStack(spacing: 16) {
-								Image(systemName: "exclamationmark.triangle")
-									.font(.largeTitle)
-                                .foregroundColor(.orange)
-								Text(error)
-									.multilineTextAlignment(.center)
-                            Button("Retry") {
+                        ErrorView(
+                            error: error,
+                            retryAction: {
                                 if case .signedIn = auth.state {
                                     feed.loadQuestions(auth: auth)
                                 }
-							}
-						}
+                            }
+                        )
                         .padding(.top, 40)
                         .padding(.bottom, 100)
-					} else if feed.questions.isEmpty {
-                        VStack(spacing: 16) {
-                            Image(systemName: "text.bubble")
-                                .font(.system(size: 60))
-                                .foregroundColor(.toguTextSecondary)
-                            Text(feed.searchText.isEmpty && feed.selectedTag == nil
-                                 ? "No questions yet"
-                                 : "No questions found")
-                                .font(.headline)
-                                .foregroundColor(.toguTextPrimary)
-                            Text(feed.searchText.isEmpty && feed.selectedTag == nil
-                                 ? "Be the first to ask a question!"
-                                 : "Try a different search term or filter")
-                                .font(.subheadline)
-                                .foregroundColor(.toguTextSecondary)
-                                .multilineTextAlignment(.center)
-                        }
+					} else if feed.isEmptyState {
+                        EmptyStateView(
+                            icon: "text.bubble",
+                            title: feed.emptyStateTitle,
+                            message: feed.emptyStateMessage,
+                            actionTitle: feed.shouldShowEmptyStateAction ? "Ask Question" : nil,
+                            action: feed.shouldShowEmptyStateAction ? {
+                                showAskQuestion = true
+                            } : nil
+                        )
                         .padding(.top, 40)
                         .padding(.bottom, 100)
 					} else if let service = airtableService {
@@ -121,6 +111,32 @@ struct HomeView: View {
                                 }
                                 .buttonStyle(.plain)
                             }
+                            
+                            // Load More Button
+                            if feed.hasMorePages {
+                                Button {
+                                    feed.loadMoreQuestions(auth: auth)
+                                } label: {
+                                    HStack {
+                                        if feed.isLoadingMore {
+                                            ProgressView()
+                                                .tint(.toguPrimary)
+                                        } else {
+                                            Text("Load More")
+                                                .font(.system(size: 15, weight: .semibold))
+                                                .foregroundColor(.toguPrimary)
+                                        }
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 14)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(Color.toguPrimary.opacity(0.3), lineWidth: 1)
+                                    )
+                                }
+                                .disabled(feed.isLoadingMore)
+                                .padding(.top, 8)
+                            }
                         }
                         .padding(.horizontal, 20)
                         .padding(.top, 20)
@@ -132,7 +148,7 @@ struct HomeView: View {
             .refreshable {
                 if case .signedIn = auth.state {
                     feed.loadQuestions(auth: auth)
-                    loadUserProgress()
+                    homeViewModel.loadUserProgress()
                 }
             }
             Spacer()
@@ -144,7 +160,13 @@ struct HomeView: View {
         .onAppear {
             if case .signedIn = auth.state {
                 feed.loadQuestions(auth: auth)
-                loadUserProgress()
+                // Update HomeViewModel's auth reference
+                homeViewModel.updateAuth(auth)
+                if let service = airtableService {
+                    // Update service if needed (though it should already be set)
+                    homeViewModel.updateAuth(auth)
+                }
+                homeViewModel.loadUserProgress()
 			}
 		}
         .sheet(isPresented: $showAskQuestion) {
@@ -233,21 +255,6 @@ struct HomeView: View {
                         feed.loadQuestions(auth: auth)
                     }
                 }
-                .onChange(of: feed.searchText) { oldValue, newValue in
-                    // Debounce search
-                    Task {
-                        try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
-                        if feed.searchText == newValue && !newValue.isEmpty {
-                            if case .signedIn = auth.state {
-                                feed.loadQuestions(auth: auth)
-                            }
-                        } else if feed.searchText.isEmpty && oldValue != newValue {
-                            if case .signedIn = auth.state {
-                                feed.loadQuestions(auth: auth)
-                            }
-                        }
-                    }
-                }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -263,15 +270,10 @@ struct HomeView: View {
             HStack(spacing: 10) {
                 ForEach(availableTags, id: \.self) { tag in
                     Button {
-                        if tag == "All" {
-                            feed.selectedTag = nil
-                        } else {
-                            feed.selectedTag = (feed.selectedTag == tag) ? nil : tag
-                        }
                         if case .signedIn = auth.state {
-                            feed.loadQuestions(auth: auth)
-				}
-			} label: {
+                            feed.selectTag(tag, auth: auth)
+                        }
+                    } label: {
                         Text(tag)
                             .font(.system(size: 14, weight: .medium))
                             .foregroundColor(
@@ -304,11 +306,11 @@ struct HomeView: View {
                     .foregroundColor(.white)
                 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Level \(calculateLevel(from: userPoints)) Developer")
+                    Text("Level \(homeViewModel.levelInfo.level) Developer")
                         .font(.system(size: 16, weight: .bold))
                         .foregroundColor(.white)
                     
-                    Text("\(formatXP(userPoints)) XP")
+                    Text("\(FormattingHelpers.formatXP(homeViewModel.userPoints)) XP")
                         .font(.system(size: 14))
                         .foregroundColor(.white.opacity(0.9))
                 }
@@ -322,20 +324,14 @@ struct HomeView: View {
                         .fill(Color.white.opacity(0.3))
                         .frame(height: 6)
                     
-                    let currentLevelXP = userPoints % 100
-                    let nextLevelXP = 100
-                    let progress = Double(currentLevelXP) / Double(nextLevelXP)
                     RoundedRectangle(cornerRadius: 4)
                         .fill(Color.white)
-                        .frame(width: geometry.size.width * min(progress, 1.0), height: 6)
+                        .frame(width: geometry.size.width * min(homeViewModel.levelInfo.progress, 1.0), height: 6)
                 }
             }
             .frame(height: 6)
             
-            let currentLevelXP = userPoints % 100
-            let nextLevelXP = 100
-            let xpNeeded = nextLevelXP - currentLevelXP
-            Text("\(xpNeeded) XP to Level \(calculateLevel(from: userPoints) + 1)")
+            Text("\(homeViewModel.levelInfo.xpNeeded) XP to Level \(homeViewModel.levelInfo.level + 1)")
                 .font(.system(size: 12))
                 .foregroundColor(.white.opacity(0.9))
         }
@@ -376,60 +372,4 @@ struct HomeView: View {
         .padding(.bottom, 68)
     }
     
-    // MARK: - Helpers
-    
-    private func loadUserProgress() {
-        guard let service = airtableService, !isLoadingUserData else { return }
-        isLoadingUserData = true
-        
-        Task {
-            do {
-                // Resolve user ID
-                var userId: String?
-                if let id = auth.airtableUserId, !id.isEmpty, id.hasPrefix("rec") {
-                    userId = id
-                } else {
-                    var email: String?
-                    if case .signedIn(let claims) = auth.state {
-                        email = (claims["email"] as? String)
-                            ?? (claims["upn"] as? String)
-                            ?? (claims["preferred_username"] as? String)
-                    }
-                    
-                    if let userEmail = email, !userEmail.isEmpty {
-                        let name = (auth.state.userInfo?["name"] as? String) ?? userEmail
-                        userId = try await service.createUserIfMissing(name: name, email: userEmail)
-                        await MainActor.run { auth.airtableUserId = userId }
-                    }
-                }
-                
-                if let userId = userId {
-                    let (_, userFields) = try await service.fetchUser(recordId: userId)
-                    await MainActor.run {
-                        userPoints = userFields.Points ?? 0
-                        isLoadingUserData = false
-                    }
-                } else {
-                    await MainActor.run {
-                        isLoadingUserData = false
-                    }
-                }
-            } catch {
-                print("⚠️ Failed to load user progress: \(error)")
-                await MainActor.run {
-                    isLoadingUserData = false
-                }
-            }
-        }
-    }
-    
-    private func calculateLevel(from xp: Int) -> Int {
-        max(1, xp / 100 + 1)
-    }
-    
-    private func formatXP(_ xp: Int) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        return formatter.string(from: NSNumber(value: xp)) ?? "\(xp)"
-    }
 }

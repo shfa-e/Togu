@@ -11,6 +11,7 @@ import Foundation
 // MARK: - Airtable List Response
 struct AirtableListResponse<T: Codable>: Codable {
     let records: [AirtableRecord<T>]
+    let offset: String?
 }
 
 // MARK: - Record Wrapper

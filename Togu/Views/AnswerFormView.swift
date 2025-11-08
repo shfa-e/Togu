@@ -13,12 +13,15 @@ struct AnswerFormView: View {
     @EnvironmentObject var auth: AuthViewModel
     @Environment(\.dismiss) var dismiss
     
-    @State private var answerText: String = ""
-    @State private var codeSnippets: [String] = []
+    @StateObject private var answerViewModel: AnswerFormViewModel
     @State private var showingCodeEditor = false
     @State private var currentCodeSnippetIndex: Int?
     
-    private let maxCharacters = 5000
+    init(question: Question, vm: QuestionDetailViewModel) {
+        self.question = question
+        self.vm = vm
+        _answerViewModel = StateObject(wrappedValue: AnswerFormViewModel(question: question, questionDetailViewModel: vm))
+    }
     
     var body: some View {
         NavigationStack {
@@ -72,7 +75,7 @@ struct AnswerFormView: View {
                 codeEditorSheet
             }
             .overlay {
-                if vm.isSubmittingAnswer {
+                if answerViewModel.isSubmitting {
                     ZStack {
                         Color.black.opacity(0.25).ignoresSafeArea()
                         ProgressView("Posting…")
@@ -131,7 +134,7 @@ struct AnswerFormView: View {
                 .foregroundColor(.toguTextPrimary)
                 .fixedSize(horizontal: false, vertical: true)
             
-            Text(questionTextWithoutCode + (questionTextWithoutCode.count > 100 ? "..." : ""))
+            Text(answerViewModel.questionPreviewText)
                 .font(.system(size: 14))
                 .foregroundColor(.toguTextSecondary)
                 .lineLimit(3)
@@ -163,7 +166,7 @@ struct AnswerFormView: View {
             
             ZStack(alignment: .topLeading) {
                 // Text Editor
-                TextEditor(text: $answerText)
+                TextEditor(text: $answerViewModel.answerText)
                     .frame(minHeight: 200)
                     .scrollContentBackground(.hidden)
                     .padding(12)
@@ -177,7 +180,7 @@ struct AnswerFormView: View {
                     )
                 
                 // Placeholder
-                if answerText.isEmpty {
+                if answerViewModel.answerText.isEmpty {
                     Text("Share your knowledge and help the community...")
                         .font(.system(size: 15))
                         .foregroundColor(.toguTextSecondary.opacity(0.6))
@@ -207,9 +210,9 @@ struct AnswerFormView: View {
                 Spacer()
                 
                 // Character Counter
-                Text("\(answerText.count) / \(maxCharacters)")
+                Text("\(answerViewModel.characterCount) / 5000")
                     .font(.system(size: 12))
-                    .foregroundColor(answerText.count > maxCharacters ? .toguError : .toguTextSecondary)
+                    .foregroundColor(answerViewModel.characterCount > 5000 ? .toguError : .toguTextSecondary)
             }
             .padding(.top, 8)
             
@@ -261,9 +264,9 @@ struct AnswerFormView: View {
             }
             
             // Display code snippets
-            if !codeSnippets.isEmpty {
+            if !answerViewModel.codeSnippets.isEmpty {
                 VStack(spacing: 8) {
-                    ForEach(Array(codeSnippets.enumerated()), id: \.offset) { index, code in
+                    ForEach(Array(answerViewModel.codeSnippets.enumerated()), id: \.offset) { index, code in
                         if !code.isEmpty {
                             HStack {
                                 Text(code)
@@ -273,7 +276,7 @@ struct AnswerFormView: View {
                                 Spacer()
                                 
                                 Button {
-                                    codeSnippets.remove(at: index)
+                                    answerViewModel.removeCodeSnippet(at: index)
                                 } label: {
                                     Image(systemName: "xmark.circle.fill")
                                         .foregroundColor(.toguTextSecondary)
@@ -367,18 +370,9 @@ struct AnswerFormView: View {
             
             Button {
                 Task {
-                    var finalAnswer = answerText
-                    
-                    // Append code snippets to answer if they exist
-                    if !codeSnippets.isEmpty {
-                        let codeBlocks = codeSnippets.filter { !$0.isEmpty }
-                        if !codeBlocks.isEmpty {
-                            finalAnswer += "\n\n" + codeBlocks.map { "```\n\($0)\n```" }.joined(separator: "\n\n")
-                        }
-                    }
-                    
-                    await vm.submitAnswer(text: finalAnswer, auth: auth)
-                    if vm.submitAnswerError == nil {
+                    let success = await answerViewModel.submitAnswer(auth: auth)
+                    if success {
+                        answerViewModel.reset()
                         dismiss()
                     }
                 }
@@ -396,10 +390,10 @@ struct AnswerFormView: View {
                 .padding(.vertical, 16)
                 .background(
                     RoundedRectangle(cornerRadius: 12)
-                        .fill(isValid ? Color.toguPrimary : Color.gray)
+                        .fill(answerViewModel.isValid ? Color.toguPrimary : Color.gray)
                 )
             }
-            .disabled(!isValid || vm.isSubmittingAnswer)
+            .disabled(!answerViewModel.isValid || answerViewModel.isSubmitting)
             .padding(.horizontal, 20)
             .padding(.vertical, 12)
             .background(Color.toguBackground)
@@ -412,18 +406,18 @@ struct AnswerFormView: View {
             VStack(spacing: 16) {
                 TextEditor(text: Binding(
                     get: {
-                        if let index = currentCodeSnippetIndex, index < codeSnippets.count {
-                            return codeSnippets[index]
+                        if let index = currentCodeSnippetIndex, index < answerViewModel.codeSnippets.count {
+                            return answerViewModel.codeSnippets[index]
                         }
                         return ""
                     },
                     set: { newValue in
-                        if let index = currentCodeSnippetIndex, index < codeSnippets.count {
-                            codeSnippets[index] = newValue
+                        if let index = currentCodeSnippetIndex, index < answerViewModel.codeSnippets.count {
+                            answerViewModel.updateCodeSnippet(at: index, with: newValue)
                         } else {
                             // Add new code snippet
                             if !newValue.isEmpty {
-                                codeSnippets.append(newValue)
+                                answerViewModel.addCodeSnippet(newValue)
                             }
                         }
                     }
@@ -455,32 +449,8 @@ struct AnswerFormView: View {
         .presentationDetents([.medium, .large])
     }
     
-    // MARK: - Computed Properties
-    private var isValid: Bool {
-        !answerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-    
     // MARK: - Helper Functions
     private func timeAgoString(from date: Date) -> String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .abbreviated
-        let relativeString = formatter.localizedString(for: date, relativeTo: Date())
-        return "Posted \(relativeString)"
-    }
-    
-    private var questionTextWithoutCode: String {
-        // Remove code blocks from text for display
-        let text = question.text
-        let pattern = #"```[\s\S]*?```"#
-        if let regex = try? NSRegularExpression(pattern: pattern, options: []) {
-            let cleaned = regex.stringByReplacingMatches(
-                in: text,
-                options: [],
-                range: NSRange(text.startIndex..., in: text),
-                withTemplate: ""
-            )
-            return cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
-        }
-        return text
+        FormattingHelpers.timeAgo(from: date)
     }
 }

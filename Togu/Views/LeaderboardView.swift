@@ -17,12 +17,6 @@ struct LeaderboardView: View {
         return AirtableService(config: config)
     }()
     
-    enum Timeframe: String, CaseIterable {
-        case allTime = "All Time"
-        case thisMonth = "This Month"
-        case thisWeek = "This Week"
-    }
-    
     init() {
         // Initialize with service - auth will be injected via environment
         if let config = AirtableConfig() {
@@ -48,20 +42,25 @@ struct LeaderboardView: View {
             
             if viewModel.isLoading {
                 Spacer()
-                ProgressView()
+                LoadingView("Loading leaderboard…")
                 Spacer()
             } else if let error = viewModel.errorMessage {
                 Spacer()
-                VStack(spacing: 12) {
-                    Image(systemName: "exclamationmark.triangle")
-                        .font(.largeTitle)
-                        .foregroundStyle(.orange)
-                    Text(error)
-                        .multilineTextAlignment(.center)
-                    Button("Retry") {
+                ErrorView(
+                    error: error,
+                    retryAction: {
                         viewModel.loadLeaderboard()
                     }
-                }
+                )
+                .padding()
+                Spacer()
+            } else if viewModel.leaderboardEntries.isEmpty {
+                Spacer()
+                EmptyStateView(
+                    icon: "trophy",
+                    title: "No leaderboard data",
+                    message: "Check back later when users start earning points!"
+                )
                 .padding()
                 Spacer()
             } else {
@@ -100,6 +99,10 @@ struct LeaderboardView: View {
         .background(Color.toguBackground.ignoresSafeArea())
         .navigationTitle("Leaderboard")
         .navigationBarTitleDisplayMode(.inline)
+        .errorToast(error: Binding(
+            get: { viewModel.errorMessage },
+            set: { viewModel.errorMessage = $0 }
+        ))
         .onAppear {
             // Update viewModel's auth reference
             viewModel.updateAuth(auth)
@@ -213,271 +216,38 @@ struct LeaderboardView: View {
         .cornerRadius(16)
     }
     
-    private func formatXP(_ xp: Int) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        return formatter.string(from: NSNumber(value: xp)) ?? "\(xp)"
-    }
-}
+    // MARK: - Helpers
+    private func formatXP(_ value: Int) -> String {
+        let absValue = abs(Double(value))
+        let sign = value < 0 ? "-" : ""
 
-// MARK: - Top Three User View
-struct TopThreeUserView: View {
-    let entry: LeaderboardEntry
-    let position: Position
-    
-    enum Position {
-        case first, second, third
-    }
-    
-    var body: some View {
-        VStack(spacing: 8) {
-            ZStack(alignment: .bottomTrailing) {
-                // Profile Picture
-                if let imageURL = entry.profilePictureURL {
-                    AsyncImage(url: imageURL) { phase in
-                        switch phase {
-                        case .empty:
-                            Circle()
-                                .fill(Color.gray.opacity(0.15))
-                                .frame(width: profileSize, height: profileSize)
-                                .overlay(
-                                    ProgressView()
-                                )
-                        case .success(let image):
-                            image
-                                .resizable()
-                                .scaledToFill()
-                                .frame(width: profileSize, height: profileSize)
-                                .clipShape(Circle())
-                                .overlay(
-                                    Circle()
-                                        .stroke(borderColor, lineWidth: borderWidth)
-                                )
-                        case .failure:
-                            profilePlaceholder
-                        @unknown default:
-                            profilePlaceholder
-                        }
-                    }
-                } else {
-                    profilePlaceholder
-                }
-                
-                // Rank Badge
-                rankBadge
-                    .offset(x: 6, y: 6)
-            }
-            
-            Text(entry.name)
-                .font(.system(size: 14, weight: .bold))
-                .foregroundColor(.toguTextPrimary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-            
-            Text("Level \(entry.level)")
-                .font(.system(size: 12))
-                .foregroundColor(.toguTextSecondary)
-            
-            Text(formatXP(entry.xp))
-                .font(.system(size: 14, weight: .bold))
-                .foregroundColor(entry.rank == 1 ? Color.toguPrimary : .toguTextPrimary)
-        }
-        .frame(maxWidth: .infinity)
-    }
-    
-    private var profilePlaceholder: some View {
-        Circle()
-            .fill(Color.gray.opacity(0.15))
-            .frame(width: profileSize, height: profileSize)
-            .overlay(
-                Image(systemName: "person.fill")
-                    .font(.system(size: iconSize))
-                    .foregroundColor(.toguTextSecondary.opacity(0.6))
-            )
-            .overlay(
-                Circle()
-                    .stroke(borderColor, lineWidth: borderWidth)
-            )
-    }
-    
-    private var profileSize: CGFloat {
-        switch position {
-        case .first: return 80
-        case .second, .third: return 70
-        }
-    }
-    
-    private var iconSize: CGFloat {
-        switch position {
-        case .first: return 35
-        case .second, .third: return 30
-        }
-    }
-    
-    private var borderColor: Color {
-        switch position {
-        case .first: return Color.toguPrimary
-        case .second, .third: return Color.gray.opacity(0.3)
-        }
-    }
-    
-    private var borderWidth: CGFloat {
-        switch position {
-        case .first: return 3
-        case .second, .third: return 1
-        }
-    }
-    
-    @ViewBuilder
-    private var rankBadge: some View {
-        switch position {
-        case .first:
-            Image(systemName: "crown.fill")
-                .font(.system(size: 24))
-                .foregroundColor(Color.toguPrimary)
-        case .second:
-            Circle()
-                .fill(Color.gray)
-                .frame(width: 24, height: 24)
-                .overlay(
-                    Text("2")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundColor(.white)
-                )
-        case .third:
-            Circle()
-                .fill(Color.orange)
-                .frame(width: 24, height: 24)
-                .overlay(
-                    Text("3")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundColor(.white)
-                )
-        }
-    }
-    
-    private func formatXP(_ xp: Int) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        return formatter.string(from: NSNumber(value: xp)) ?? "\(xp)"
-    }
-}
+        let million = 1_000_000.0
+        let thousand = 1_000.0
 
-// MARK: - Leaderboard Row View
-struct LeaderboardRowView: View {
-    let entry: LeaderboardEntry
-    
-    var body: some View {
-        HStack(spacing: 12) {
-            // Rank Number
-            ZStack {
-                Circle()
-                    .fill(Color(hex: "#F5F5F5"))
-                    .frame(width: 36, height: 36)
-                Text("\(entry.rank)")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(.toguTextSecondary)
-            }
-            
-            // Profile Picture
-            if let imageURL = entry.profilePictureURL {
-                AsyncImage(url: imageURL) { phase in
-                    switch phase {
-                    case .empty:
-                        Circle()
-                            .fill(Color.gray.opacity(0.15))
-                            .frame(width: 44, height: 44)
-                            .overlay(ProgressView())
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: 44, height: 44)
-                            .clipShape(Circle())
-                    case .failure:
-                        profilePlaceholder
-                    @unknown default:
-                        profilePlaceholder
-                    }
-                }
-            } else {
-                profilePlaceholder
-            }
-            
-            // Name and Level
-            VStack(alignment: .leading, spacing: 4) {
-                Text(entry.name)
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundColor(.toguTextPrimary)
-                
-                HStack(spacing: 6) {
-                    Text("Level \(entry.level)")
-                        .font(.system(size: 13))
-                        .foregroundColor(.toguTextSecondary)
-                    
-                    // Achievements
-                    if !entry.achievements.isEmpty {
-                        HStack(spacing: 4) {
-                            ForEach(entry.achievements, id: \.self) { achievement in
-                                achievementIcon(for: achievement)
-                            }
-                        }
-                    }
-                }
-            }
-            
-            Spacer()
-            
-            // XP
-            VStack(alignment: .trailing, spacing: 2) {
-                Text(formatXP(entry.xp))
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundColor(.toguTextPrimary)
-                Text("XP")
-                    .font(.system(size: 11))
-                    .foregroundColor(.toguTextSecondary)
-            }
-        }
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color.white)
-                .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
-        )
-    }
-    
-    private var profilePlaceholder: some View {
-        Circle()
-            .fill(Color.gray.opacity(0.15))
-            .frame(width: 44, height: 44)
-            .overlay(
-                Image(systemName: "person.fill")
-                    .font(.system(size: 20))
-                    .foregroundColor(.toguTextSecondary.opacity(0.6))
-            )
-    }
-    
-    @ViewBuilder
-    private func achievementIcon(for achievement: LeaderboardEntry.Achievement) -> some View {
-        switch achievement {
-        case .goldTrophy:
-            Image(systemName: "trophy.fill")
-                .font(.system(size: 10))
-                .foregroundColor(.yellow)
-        case .silverMedal:
-            Image(systemName: "medal.fill")
-                .font(.system(size: 10))
-                .foregroundColor(.gray)
-        case .purpleStar:
-            Image(systemName: "star.fill")
-                .font(.system(size: 10))
-                .foregroundColor(Color.toguPrimary)
-        }
-    }
-    
-    private func formatXP(_ xp: Int) -> String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
-        return formatter.string(from: NSNumber(value: xp)) ?? "\(xp)"
+        formatter.maximumFractionDigits = 1
+        formatter.minimumFractionDigits = 0
+
+        if absValue >= million {
+            let formatted = absValue / million
+            if let s = formatter.string(from: NSNumber(value: formatted)) {
+                return "\(sign)\(s)M"
+            }
+            return "\(sign)\(String(format: "%.1f", formatted))M"
+        } else if absValue >= thousand {
+            let formatted = absValue / thousand
+            if let s = formatter.string(from: NSNumber(value: formatted)) {
+                return "\(sign)\(s)K"
+            }
+            return "\(sign)\(String(format: "%.1f", formatted))K"
+        } else {
+            let intFormatter = NumberFormatter()
+            intFormatter.numberStyle = .decimal
+            intFormatter.maximumFractionDigits = 0
+            intFormatter.minimumFractionDigits = 0
+            return "\(sign)\(intFormatter.string(from: NSNumber(value: abs(value))) ?? String(value))"
+        }
     }
+    
 }
