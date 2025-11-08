@@ -103,12 +103,34 @@ struct VoteFields: Codable {
 
 // 5. Badges
 struct BadgeFields: Codable {
-    var BadgeID: Int?
-    var BadgeName: String?
-    var Description: String?
-    var Icon: [ATAttachment]?
-    var EarnedBy: [String]?
-    var DateEarned: String?
+    let badgeName: String?
+    let badgeID: Int?
+    let description: String?
+    let icon: [ATAttachment]?
+    let earnedBy: [String]?
+    let dateEarned: String?
+    let totalEarned: Int?
+    // Optional AI fields kept generic; remove or adjust if you don't use them
+    let badgeSummaryAI: AirtableAIField?
+    let suggestedBadgeImprovementsAI: AirtableAIField?
+
+    struct AirtableAIField: Codable {
+        let state: String?
+        let value: String?
+        let isStale: Bool?
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case badgeName = "Badge Name"
+        case badgeID = "Badge ID"
+        case description = "Description"
+        case icon = "Icon"
+        case earnedBy = "EarnedBy"             // Matches the field you created
+        case dateEarned = "Date Earned"
+        case totalEarned = "Total Earned"
+        case badgeSummaryAI = "Badge Summary (AI)"
+        case suggestedBadgeImprovementsAI = "Suggested Badge Improvements (AI)"
+    }
 }
 
 struct AirtableAttachment: Codable {
