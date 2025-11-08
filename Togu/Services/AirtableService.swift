@@ -16,7 +16,7 @@ final class AirtableService {
         self.config = config
         self.urlSession = urlSession
     }
-
+    
     struct NewQuestionImage {
         let data: Data
         let filename: String
@@ -32,7 +32,7 @@ final class AirtableService {
         case invalidQuestionId
         case missingImageData
     }
-
+    
     // MARK: - Fetch Questions
 
     func fetchQuestions() async throws -> [Question] {
@@ -93,7 +93,7 @@ final class AirtableService {
 
         return answers.sorted(by: { $0.createdAt < $1.createdAt })
     }
-
+    
     // MARK: - Create Answer
 
     func createAnswer(for question: Question, text: String, authorId: String) async throws {
@@ -130,6 +130,11 @@ final class AirtableService {
 
         // decode or ignore response as necessary; here we simply succeed on 2xx
         _ = data
+        
+        // Award points for posting an answer (fire and forget)
+        Task {
+            await addPoints(userRecordId: authorId, points: 5, reason: "Posted an answer")
+        }
         
         // Check and award milestone badges (fire and forget)
         Task {
@@ -187,6 +192,11 @@ final class AirtableService {
         let fallbackId = record.id ?? UUID().uuidString
         let createdTime = record.createdTime ?? ISO8601DateFormatter().string(from: Date())
         
+        // Award points for posting a question (fire and forget)
+        Task {
+            await addPoints(userRecordId: authorId, points: 10, reason: "Posted a question")
+        }
+        
         // Check and award milestone badges (fire and forget)
         Task {
             // small initial delay so Airtable has time to index the new record
@@ -196,7 +206,7 @@ final class AirtableService {
         
         return record.fields.toQuestion(fallbackId: fallbackId, createdTime: createdTime)
     }
-
+    
     // MARK: - Helper: Parse Airtable date safely
 
     private func parseAirtableDate(_ str: String?) -> Date {
@@ -216,7 +226,7 @@ final class AirtableService {
 
         return Date()
     }
-
+    
     // MARK: - Helpers
 
     private func makeListURL(tableName: String) throws -> URL {
@@ -268,7 +278,8 @@ final class AirtableService {
         let body: [String: Any] = [
             "fields": [
                 "Name": name,
-                "Email": email
+                "Email": email,
+                "Points": 0  // Initialize points to 0
             ]
         ]
 
@@ -392,6 +403,82 @@ final class AirtableService {
         let (_, updateResponse) = try await urlSession.data(for: updateRequest)
         guard let http = updateResponse as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw ServiceError.http
+        }
+        
+        // Award points to the author when their content gets upvoted
+        Task {
+            await awardPointsForUpvote(targetType: targetType, targetId: targetId, fetchData: fetchData)
+        }
+    }
+    
+    /// Award points to the author when their content receives an upvote
+    private func awardPointsForUpvote(targetType: String, targetId: String, fetchData: Data) async {
+        do {
+            // Get author ID from the record data we already fetched
+            let authorId: String?
+            if targetType == "Question" {
+                let record = try JSONDecoder().decode(AirtableRecord<QuestionFields>.self, from: fetchData)
+                authorId = record.fields.author?.first
+            } else {
+                let record = try JSONDecoder().decode(AirtableRecord<AnswerFields>.self, from: fetchData)
+                authorId = record.fields.Author?.first
+            }
+            
+            if let authorId = authorId, !authorId.isEmpty {
+                await addPoints(userRecordId: authorId, points: 1, reason: "Received an upvote")
+            }
+        } catch {
+            print("⚠️ Failed to award points for upvote: \(error)")
+        }
+    }
+    
+    /// Add points to a user's total
+    func addPoints(userRecordId: String, points: Int, reason: String = "") async {
+        guard !userRecordId.isEmpty, points > 0 else { return }
+        
+        do {
+            // Fetch current user record to get current points
+            let (_, userFields) = try await fetchUser(recordId: userRecordId)
+            let currentPoints = userFields.Points ?? 0
+            let newPoints = currentPoints + points
+            
+            // Update user's points
+            guard let updateURL = URL(string: "https://api.airtable.com/v0/\(config.baseId)/Users/\(userRecordId)") else {
+                print("❌ Failed to create update URL for points")
+                return
+            }
+            
+            var updateRequest = URLRequest(url: updateURL)
+            updateRequest.httpMethod = "PATCH"
+            updateRequest.setValue("Bearer \(config.apiKey)", forHTTPHeaderField: "Authorization")
+            updateRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            
+            let updateBody: [String: Any] = [
+                "fields": [
+                    "Points": newPoints
+                ]
+            ]
+            
+            updateRequest.httpBody = try JSONSerialization.data(withJSONObject: updateBody, options: [])
+            
+            let (_, updateResponse) = try await urlSession.data(for: updateRequest)
+            guard let http = updateResponse as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+                print("❌ Failed to update points: HTTP \((updateResponse as? HTTPURLResponse)?.statusCode ?? -1)")
+                return
+            }
+            
+            print("✅ Added \(points) points to user \(userRecordId) (now \(newPoints) total)\(reason.isEmpty ? "" : " - \(reason)")")
+            
+            // Check for points milestone badges (e.g., 100 points)
+            if newPoints >= 100 {
+                do {
+                    try await awardBadge(userRecordId: userRecordId, badgeName: "Centurion")
+                } catch {
+                    print("⚠️ Failed to award Centurion badge: \(error)")
+                }
+            }
+        } catch {
+            print("⚠️ Failed to add points to user: \(error)")
         }
     }
 
