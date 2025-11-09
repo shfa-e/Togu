@@ -11,9 +11,11 @@ struct MainTabView: View {
     @EnvironmentObject var auth: AuthViewModel
     @EnvironmentObject var router: Router
     
+    @StateObject private var badgeNotificationManager = BadgeNotificationManager()
     @State private var airtableService: AirtableService? = {
         guard let config = AirtableConfig() else { return nil }
-        return AirtableService(config: config)
+        let service = AirtableService(config: config)
+        return service
     }()
     
     var body: some View {
@@ -22,6 +24,7 @@ struct MainTabView: View {
                 HomeView()
                     .environmentObject(auth)
                     .environmentObject(router)
+                    .environmentObject(badgeNotificationManager)
             }
             .tabItem {
                 Image(systemName: "house.fill")
@@ -50,6 +53,7 @@ struct MainTabView: View {
                 if let service = airtableService {
                     ProfileView(airtable: service, auth: auth)
                         .environmentObject(auth)
+                        .environmentObject(badgeNotificationManager)
                 } else {
                     VStack(spacing: 16) {
                         Image(systemName: "exclamationmark.triangle")
@@ -71,6 +75,13 @@ struct MainTabView: View {
             }
         }
         .tint(.toguPrimary)
+        .onAppear {
+            // Set badge notification manager on AirtableService
+            if let service = airtableService {
+                service.badgeNotificationManager = badgeNotificationManager
+            }
+        }
+        .badgeToast(badgeName: $badgeNotificationManager.earnedBadgeName)
     }
 }
 

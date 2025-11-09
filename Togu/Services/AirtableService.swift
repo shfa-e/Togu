@@ -19,6 +19,9 @@ final class AirtableService {
     private lazy var votesService = VotesService(config: config, urlSession: urlSession, questionsService: questionsService, answersService: answersService)
     private lazy var badgesService = BadgesService(config: config, urlSession: urlSession)
     private lazy var leaderboardService = LeaderboardService(config: config, urlSession: urlSession)
+    
+    // Badge notification manager (optional, set by views)
+    weak var badgeNotificationManager: BadgeNotificationManager?
 
     init(config: AirtableConfig, urlSession: URLSession = .shared) {
         self.config = config
@@ -213,12 +216,24 @@ final class AirtableService {
         return try await badgesService.hasUserEarnedBadge(userRecordId: userRecordId, badgeName: badgeName)
     }
     
-    func awardBadge(userRecordId: String, badgeName: String) async throws {
-        try await badgesService.awardBadge(userRecordId: userRecordId, badgeName: badgeName)
+    func awardBadge(userRecordId: String, badgeName: String) async throws -> String? {
+        let badgeName = try await badgesService.awardBadge(userRecordId: userRecordId, badgeName: badgeName)
+        if let badgeName = badgeName {
+            await MainActor.run {
+                badgeNotificationManager?.showBadgeNotification(badgeName)
+            }
+        }
+        return badgeName
     }
     
-    func checkAndAwardMilestoneBadges(userRecordId: String, action: BadgeMilestone) async {
-        await badgesService.checkAndAwardMilestoneBadges(userRecordId: userRecordId, action: action)
+    func checkAndAwardMilestoneBadges(userRecordId: String, action: BadgeMilestone) async -> String? {
+        let badgeName = await badgesService.checkAndAwardMilestoneBadges(userRecordId: userRecordId, action: action)
+        if let badgeName = badgeName {
+            Task { @MainActor in
+                badgeNotificationManager?.showBadgeNotification(badgeName)
+            }
+        }
+        return badgeName
     }
     
     // Check user's question count and award milestone badges
@@ -237,7 +252,11 @@ final class AirtableService {
                     if count == 1 {
                         print("🎯 User has exactly 1 question - awarding 'First Question' badge")
                         do {
-                            try await badgesService.awardBadge(userRecordId: userRecordId, badgeName: "First Question")
+                            if let badgeName = try await badgesService.awardBadge(userRecordId: userRecordId, badgeName: "First Question") {
+                                await MainActor.run {
+                                    badgeNotificationManager?.showBadgeNotification(badgeName)
+                                }
+                            }
                         } catch {
                             print("❌ Failed to award 'First Question' badge: \(error)")
                         }
@@ -245,7 +264,11 @@ final class AirtableService {
                     if count == 5 {
                         print("🎯 User has exactly 5 questions - awarding 'Question Master' badge")
                         do {
-                            try await badgesService.awardBadge(userRecordId: userRecordId, badgeName: "Question Master")
+                            if let badgeName = try await badgesService.awardBadge(userRecordId: userRecordId, badgeName: "Question Master") {
+                                await MainActor.run {
+                                    badgeNotificationManager?.showBadgeNotification(badgeName)
+                                }
+                            }
                         } catch {
                             print("❌ Failed to award 'Question Master' badge: \(error)")
                         }
@@ -278,14 +301,22 @@ final class AirtableService {
             if count == 1 {
                 print("🎯 User has exactly 1 answer - awarding 'First Answer' badge")
                 do {
-                    try await badgesService.awardBadge(userRecordId: userRecordId, badgeName: "First Answer")
+                    if let badgeName = try await badgesService.awardBadge(userRecordId: userRecordId, badgeName: "First Answer") {
+                        await MainActor.run {
+                            badgeNotificationManager?.showBadgeNotification(badgeName)
+                        }
+                    }
                 } catch {
                     print("❌ Failed to award 'First Answer' badge: \(error)")
                 }
             } else if count == 10 {
                 print("🎯 User has exactly 10 answers - awarding 'Answer Expert' badge")
                 do {
-                    try await badgesService.awardBadge(userRecordId: userRecordId, badgeName: "Answer Expert")
+                    if let badgeName = try await badgesService.awardBadge(userRecordId: userRecordId, badgeName: "Answer Expert") {
+                        await MainActor.run {
+                            badgeNotificationManager?.showBadgeNotification(badgeName)
+                        }
+                    }
                 } catch {
                     print("❌ Failed to award 'Answer Expert' badge: \(error)")
                 }

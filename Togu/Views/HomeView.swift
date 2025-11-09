@@ -11,6 +11,7 @@ import Combine
 struct HomeView: View {
     @EnvironmentObject var auth: AuthViewModel
     @EnvironmentObject var router: Router
+    @EnvironmentObject var badgeNotificationManager: BadgeNotificationManager
     
     @StateObject var feed = FeedViewModel()
     @StateObject private var homeViewModel: HomeViewModel
@@ -95,6 +96,7 @@ struct HomeView: View {
 							NavigationLink {
 								QuestionDetailView(question: question, airtable: service)
 									.environmentObject(auth)
+									.environmentObject(badgeNotificationManager)
 							} label: {
                                     QuestionCardView(
                                         question: question,
@@ -165,6 +167,8 @@ struct HomeView: View {
                 if let service = airtableService {
                     // Update service if needed (though it should already be set)
                     homeViewModel.updateAuth(auth)
+                    // Set badge notification manager on service
+                    service.badgeNotificationManager = badgeNotificationManager
                 }
                 homeViewModel.loadUserProgress()
 			}

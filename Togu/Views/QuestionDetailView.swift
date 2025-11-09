@@ -14,6 +14,7 @@ struct QuestionDetailView: View {
     @StateObject private var vm: QuestionDetailViewModel
     @State private var showAnswerForm = false
     @EnvironmentObject var auth: AuthViewModel
+    @EnvironmentObject var badgeNotificationManager: BadgeNotificationManager
     
     init(question: Question, airtable: AirtableService) {
         self.question = question
@@ -57,6 +58,8 @@ struct QuestionDetailView: View {
             set: { vm.errorMessage = $0 }
         ))
         .onAppear { 
+            // Set badge notification manager on service
+            airtable.badgeNotificationManager = badgeNotificationManager
             vm.loadAnswers(for: question, auth: auth)
             Task {
                 await vm.checkVoteStatus(auth: auth)

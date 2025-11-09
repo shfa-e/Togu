@@ -10,6 +10,7 @@ import SwiftUI
 struct ProfileView: View {
     @StateObject private var viewModel: ProfileViewModel
     @EnvironmentObject var auth: AuthViewModel
+    @EnvironmentObject var badgeNotificationManager: BadgeNotificationManager
     
     let airtable: AirtableService
     
@@ -80,6 +81,10 @@ struct ProfileView: View {
             get: { viewModel.errorMessage },
             set: { viewModel.errorMessage = $0 }
         ))
+        .onAppear {
+            // Set badge notification manager on service
+            airtable.badgeNotificationManager = badgeNotificationManager
+        }
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button {
@@ -347,6 +352,7 @@ struct ProfileView: View {
                     NavigationLink {
                         QuestionDetailView(question: question, airtable: airtable)
                             .environmentObject(auth)
+                            .environmentObject(badgeNotificationManager)
                     } label: {
                         ProfileQuestionCard(question: question)
                     }

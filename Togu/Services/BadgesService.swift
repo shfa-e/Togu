@@ -129,7 +129,8 @@ final class BadgesService {
     }
     
     /// Award a badge to a user by badge name
-    func awardBadge(userRecordId: String, badgeName: String) async throws {
+    /// Returns the badge name if successfully awarded (newly earned), nil if already had or failed
+    func awardBadge(userRecordId: String, badgeName: String) async throws -> String? {
         print("🏆 Attempting to award badge '\(badgeName)' to user \(userRecordId)")
         
         // First, check if user already has this badge
@@ -137,7 +138,7 @@ final class BadgesService {
             let alreadyHas = try await hasUserEarnedBadge(userRecordId: userRecordId, badgeName: badgeName)
             if alreadyHas {
                 print("⚠️ User \(userRecordId) already has badge: \(badgeName)")
-                return
+                return nil
             }
         } catch {
             print("⚠️ Error checking if user has badge: \(error)")
@@ -183,12 +184,12 @@ final class BadgesService {
             print("⚠️ Badge '\(badgeName)' not found in Airtable. Available badges: \(decoded.records.map { $0.fields.badgeName ?? "Unknown" })")
             // Try to list all badges for debugging
             await listAllBadges()
-            return
+            return nil
         }
         
         guard let badgeRecordId = badgeRecord.id else {
             print("❌ Badge record found but has no ID")
-            return
+            return nil
         }
         
         print("✅ Found badge record: \(badgeRecordId)")
@@ -197,7 +198,7 @@ final class BadgesService {
         var currentEarnedBy = badgeRecord.fields.earnedBy ?? []
         if currentEarnedBy.contains(userRecordId) {
             print("⚠️ User already in EarnedBy array")
-            return
+            return nil
         }
         
         currentEarnedBy.append(userRecordId)
@@ -236,26 +237,29 @@ final class BadgesService {
         }
         
         print("✅ Successfully awarded badge '\(badgeName)' to user \(userRecordId)")
+        return badgeName
     }
     
     /// Check and award milestone badges after a user action
-    func checkAndAwardMilestoneBadges(userRecordId: String, action: BadgeMilestone) async {
+    /// Returns the badge name if successfully awarded, nil otherwise
+    func checkAndAwardMilestoneBadges(userRecordId: String, action: BadgeMilestone) async -> String? {
         do {
             switch action {
             case .firstQuestion:
-                try await awardBadge(userRecordId: userRecordId, badgeName: "First Question")
+                return try await awardBadge(userRecordId: userRecordId, badgeName: "First Question")
             case .firstAnswer:
-                try await awardBadge(userRecordId: userRecordId, badgeName: "First Answer")
+                return try await awardBadge(userRecordId: userRecordId, badgeName: "First Answer")
             case .fiveQuestions:
-                try await awardBadge(userRecordId: userRecordId, badgeName: "Question Master")
+                return try await awardBadge(userRecordId: userRecordId, badgeName: "Question Master")
             case .tenAnswers:
-                try await awardBadge(userRecordId: userRecordId, badgeName: "Answer Expert")
+                return try await awardBadge(userRecordId: userRecordId, badgeName: "Answer Expert")
             case .hundredPoints:
-                try await awardBadge(userRecordId: userRecordId, badgeName: "Centurion")
+                return try await awardBadge(userRecordId: userRecordId, badgeName: "Centurion")
             }
         } catch {
             // Silently fail - badge awarding shouldn't break the main flow
             print("⚠️ Failed to award badge for \(action): \(error)")
+            return nil
         }
     }
     
