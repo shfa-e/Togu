@@ -57,7 +57,7 @@ struct AnswerFormView: View {
                         .frame(height: 100)
                 }
             }
-            .background(Color(hex: "#F5F5F5").ignoresSafeArea())
+            .background(Color.toguLightBackground.ignoresSafeArea())
             .navigationTitle("Post Answer")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -142,7 +142,7 @@ struct AnswerFormView: View {
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(Color.white)
+                .fill(Color(uiColor: .systemBackground))
                 .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
         )
     }
@@ -172,10 +172,10 @@ struct AnswerFormView: View {
                     .padding(12)
                     .background(
                         RoundedRectangle(cornerRadius: 12)
-                            .fill(Color.white)
+                            .fill(Color(uiColor: .systemBackground))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 12)
-                                    .stroke(Color(hex: "#E5E5E5"), lineWidth: 1)
+                                    .stroke(Color.toguBorder, lineWidth: 1)
                             )
                     )
                 
@@ -285,7 +285,7 @@ struct AnswerFormView: View {
                             .padding(12)
                             .background(
                                 RoundedRectangle(cornerRadius: 8)
-                                    .fill(Color(hex: "#F5F5F5"))
+                                    .fill(Color.toguLightBackground)
                             )
                         }
                     }
@@ -424,7 +424,7 @@ struct AnswerFormView: View {
                 ))
                 .font(.system(size: 14, design: .monospaced))
                 .padding()
-                .background(Color(hex: "#F5F5F5"))
+                .background(Color.toguLightBackground)
                 .cornerRadius(12)
                 
                 Spacer()

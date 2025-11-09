@@ -52,7 +52,7 @@ struct ActivityCard: View {
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(Color.white)
+                .fill(Color(uiColor: .systemBackground))
         )
     }
     

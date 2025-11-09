@@ -113,7 +113,7 @@ struct QuestionHeaderCard: View {
         .padding(22)
         .background(
             RoundedRectangle(cornerRadius: 26)
-                .fill(Color.white)
+                .fill(Color(uiColor: .systemBackground))
                 .stroke(Color.toguBorder, lineWidth: 1)
                 .shadow(color: Color.black.opacity(0.05), radius: 6, x: 0, y: 2)
         )

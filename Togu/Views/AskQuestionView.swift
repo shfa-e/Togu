@@ -62,7 +62,7 @@ struct AskQuestionView: View {
                 .padding(.horizontal, 20)
                 .padding(.top, 20)
             }
-            .background(Color(hex: "#F5F5F5").ignoresSafeArea())
+            .background(Color.toguLightBackground.ignoresSafeArea())
             .navigationTitle("Ask a Question")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -108,10 +108,10 @@ struct AskQuestionView: View {
                 .padding(14)
                 .background(
                     RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.white)
+                        .fill(Color(uiColor: .systemBackground))
                         .overlay(
                             RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color(hex: "#E5E5E5"), lineWidth: 1)
+                                .stroke(Color.toguBorder, lineWidth: 1)
                         )
                 )
             
@@ -199,7 +199,7 @@ struct AskQuestionView: View {
                 .padding(12)
                 .background(
                     RoundedRectangle(cornerRadius: 8)
-                        .fill(Color(hex: "#F5F5F5"))
+                        .fill(Color.toguLightBackground)
                 )
             }
         }
@@ -259,7 +259,7 @@ struct AskQuestionView: View {
                                 .padding(.vertical, 8)
                                 .background(
                                     Capsule()
-                                        .fill(viewModel.tags.contains(tag) ? Color.toguPrimary : Color(hex: "#F5F5F5"))
+                                        .fill(viewModel.tags.contains(tag) ? Color.toguPrimary : Color.toguLightBackground)
                                 )
                         }
                         .disabled(viewModel.tags.count >= 5 && !viewModel.tags.contains(tag))
@@ -318,7 +318,7 @@ struct AskQuestionView: View {
                 .padding(12)
                 .background(
                     RoundedRectangle(cornerRadius: 8)
-                        .fill(Color(hex: "#F5F5F5"))
+                        .fill(Color.toguLightBackground)
                 )
             }
         }
@@ -343,10 +343,10 @@ struct AskQuestionView: View {
         .padding(.vertical, 16)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(Color.white)
+                .fill(Color(uiColor: .systemBackground))
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color(hex: "#E5E5E5"), lineWidth: 1)
+                        .stroke(Color.toguBorder, lineWidth: 1)
                 )
         )
     }
@@ -408,7 +408,7 @@ struct AskQuestionView: View {
                         .padding(.vertical, 16)
                         .background(
                             RoundedRectangle(cornerRadius: 12)
-                                .fill(Color(hex: "#F5F5F5"))
+                                .fill(Color.toguLightBackground)
                         )
                 }
                 
@@ -443,7 +443,7 @@ struct AskQuestionView: View {
                 ))
                 .font(.system(size: 14, design: .monospaced))
                 .padding()
-                .background(Color(hex: "#F5F5F5"))
+                .background(Color.toguLightBackground)
                 .cornerRadius(12)
                 
                 Spacer()

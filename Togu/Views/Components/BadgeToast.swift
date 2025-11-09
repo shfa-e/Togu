@@ -58,8 +58,8 @@ struct BadgeToast: ViewModifier {
                     .padding(16)
                     .background(
                         RoundedRectangle(cornerRadius: 12)
-                            .fill(Color.white)
-                            .shadow(color: Color.black.opacity(0.15), radius: 12, x: 0, y: 4)
+                            .fill(Color(uiColor: .systemBackground))
+                            .shadow(color: Color.black.opacity(0.1), radius: 12, x: 0, y: 4)
                     )
                     .padding(.horizontal, 20)
                     .padding(.top, 8)

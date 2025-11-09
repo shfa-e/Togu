@@ -50,7 +50,7 @@ struct QuestionDetailView: View {
                 .padding(20)
                 .padding(.bottom, 100) // Space for FAB
             }
-        .background(Color(hex: "#F5F5F5").ignoresSafeArea())
+        .background(Color.toguLightBackground.ignoresSafeArea())
         .navigationTitle("Question")
         .navigationBarTitleDisplayMode(.inline)
         .errorToast(error: Binding(

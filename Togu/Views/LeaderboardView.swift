@@ -141,7 +141,7 @@ struct LeaderboardView: View {
         .padding(4)
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(Color(hex: "#F5F5F5"))
+                .fill(Color.toguLightBackground)
         )
         .padding(.horizontal, 20)
     }

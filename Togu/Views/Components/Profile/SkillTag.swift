@@ -25,7 +25,7 @@ struct SkillTag: View {
         .padding(.vertical, 10)
         .background(
             RoundedRectangle(cornerRadius: 20)
-                .fill(Color.white)
+                .fill(Color(uiColor: .systemBackground))
         )
     }
 }

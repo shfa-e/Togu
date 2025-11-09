@@ -79,7 +79,7 @@ struct AnswerCardView: View {
         .padding(20)
         .background(
             RoundedRectangle(cornerRadius: 22)
-                .fill(Color.white)
+                .fill(Color(uiColor: .systemBackground))
                 .overlay(
                     RoundedRectangle(cornerRadius: 22)
                         .stroke(Color.toguBorder, lineWidth: 1)

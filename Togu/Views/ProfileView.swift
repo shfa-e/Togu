@@ -74,7 +74,7 @@ struct ProfileView: View {
                     .frame(height: 100)
             }
         }
-        .background(Color(hex: "#F5F5F5").ignoresSafeArea())
+        .background(Color.toguLightBackground.ignoresSafeArea())
         .navigationTitle("Profile")
         .navigationBarTitleDisplayMode(.inline)
         .errorToast(error: Binding(

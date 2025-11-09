@@ -146,7 +146,7 @@ struct HomeView: View {
                     }
                 }
             }
-            .background(Color(hex: "#F5F5F5").ignoresSafeArea())
+            .background(Color.toguLightBackground.ignoresSafeArea())
             .refreshable {
                 if case .signedIn = auth.state {
                     feed.loadQuestions(auth: auth)
@@ -264,7 +264,7 @@ struct HomeView: View {
         .padding(.vertical, 12)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(Color.white)
+                .fill(Color(uiColor: .systemBackground))
         )
     }
     
@@ -292,7 +292,7 @@ struct HomeView: View {
                                     .fill(
                                         (tag == "All" && feed.selectedTag == nil) || feed.selectedTag == tag
                                             ? Color.toguPrimary
-                                            : Color(hex: "#F5F5F5")
+                                            : Color.toguLightBackground
                                     )
                             )
                     }

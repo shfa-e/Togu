@@ -15,7 +15,7 @@ struct LeaderboardRowView: View {
             // Rank Number
             ZStack {
                 Circle()
-                    .fill(Color(hex: "#F5F5F5"))
+                    .fill(Color.toguLightBackground)
                     .frame(width: 36, height: 36)
                 Text("\(entry.rank)")
                     .font(.system(size: 14, weight: .medium))
@@ -84,7 +84,7 @@ struct LeaderboardRowView: View {
         .padding(12)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(Color.white)
+                .fill(Color(uiColor: .systemBackground))
                 .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
         )
     }

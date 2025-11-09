@@ -17,11 +17,14 @@ enum ToguFont {
 extension Color {
     // MARK: Core Brand Colors (new canonical names)
     static let toguPrimary = Color(hex: "#6155F5")     // Main Purple
-    static let toguBackground = Color(hex: "#FFFFFF")  // Background (white)
-    static let toguTextPrimary = Color(hex: "#000000") // Main text (black)
-    static let toguTextSecondary = Color(hex: "#4B5563").opacity(0.85) // gray-ish
-    static let toguCard = Color(hex: "#F9F9FB")         // light gray for cards
-    static let toguBorder = Color(hex: "#E5E5EE")
+    
+    // Adaptive colors for dark mode support
+    static let toguBackground = Color(uiColor: .systemBackground) // Adaptive background
+    static let toguTextPrimary = Color(uiColor: .label) // Adaptive text color
+    static let toguTextSecondary = Color(uiColor: .secondaryLabel) // Adaptive secondary text
+    static let toguCard = Color(uiColor: .secondarySystemBackground) // Adaptive card background
+    static let toguBorder = Color(uiColor: .separator) // Adaptive border color
+    static let toguLightBackground = Color(uiColor: .tertiarySystemBackground) // Adaptive light background (replaces #F5F5F5)
 
     // MARK: States
     static let toguPressed = Color(hex: "#4C44C7")      // darker violet
@@ -32,7 +35,7 @@ extension Color {
     static let toguWarning = Color(hex: "#FACC15")      // yellow for caution
 
     // MARK: Utilities
-    static let toguShadow = Color.black.opacity(0.08)
+    static let toguShadow = Color.black.opacity(0.08) // Works in both modes
     
     // MARK: Backward-compatible aliases
     // If older views refer to these names, they will still compile.
