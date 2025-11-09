@@ -143,6 +143,28 @@ Alternatively, set them as environment variables in your Xcode scheme.
 
 ---
 
+## 🎥 Demo Video
+
+Watch the demo of **Togu** in action here:  
+[![Watch the video](https://img.youtube.com/vi/2KAg0ys10bg/maxresdefault.jpg)](https://youtu.be/2KAg0ys10bg)
+
+> 💡 *Click the image above to watch the demo on YouTube.*
+
+---
+
+
+## 🔑 Test Account for Login
+
+For quick testing and access, you can use the following **test user account** to sign in and create a password:
+
+**Email:** `reignite@hackathon.com`  
+**Password:** `Hackathon1@`  
+
+This account is intended for **demo and hackathon testing purposes**.  
+Once logged in, you can, post questions & answers, reciver badges, and explore all platform features.
+
+---
+
 ## 📁 Project Structure
 
 ```
@@ -345,3 +367,4 @@ If you encounter any issues or have questions:
 
 **Made with ❤️ for learner, by learners**
 
+---
