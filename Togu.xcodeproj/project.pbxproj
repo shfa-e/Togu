@@ -7,14 +7,14 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		1B721EDF2EBBC579000B48CA /* OLOidc.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1B721ECE2EBBB439000B48CA /* OLOidc.framework */; platformFilter = ios; };
-		1B721EE02EBBC579000B48CA /* OLOidc.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 1B721ECE2EBBB439000B48CA /* OLOidc.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		1B7467AC2EC1F79C00FADDA1 /* OLOidc.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1B7467A62EC1F76B00FADDA1 /* OLOidc.framework */; platformFilter = ios; };
+		1B7467AD2EC1F79C00FADDA1 /* OLOidc.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 1B7467A62EC1F76B00FADDA1 /* OLOidc.framework */; platformFilter = ios; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
-		1B721ECD2EBBB439000B48CA /* PBXContainerItemProxy */ = {
+		1B7467A52EC1F76B00FADDA1 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
-			containerPortal = 1B721EC22EBBB439000B48CA /* OLOidc.xcodeproj */;
+			containerPortal = 1B74679B2EC1F76B00FADDA1 /* OLOidc.xcodeproj */;
 			proxyType = 2;
 			remoteGlobalIDString = 58D2D24E23BA2765008DC877;
 			remoteInfo = OLOidc;
@@ -28,7 +28,7 @@
 			dstPath = "";
 			dstSubfolderSpec = 10;
 			files = (
-				1B721EE02EBBC579000B48CA /* OLOidc.framework in Embed Frameworks */,
+				1B7467AD2EC1F79C00FADDA1 /* OLOidc.framework in Embed Frameworks */,
 			);
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -36,8 +36,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		1B721EC22EBBB439000B48CA /* OLOidc.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = OLOidc.xcodeproj; path = "../onelogin-oidc-ios/OLOidc.xcodeproj"; sourceTree = SOURCE_ROOT; };
 		1B721EE12EBBC579000B48CA /* Togu.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Togu.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		1B74679B2EC1F76B00FADDA1 /* OLOidc.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = OLOidc.xcodeproj; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -66,35 +66,35 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				1B721EDF2EBBC579000B48CA /* OLOidc.framework in Frameworks */,
+				1B7467AC2EC1F79C00FADDA1 /* OLOidc.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		1B721EC52EBBB439000B48CA /* Products */ = {
-			isa = PBXGroup;
-			children = (
-				1B721ECE2EBBB439000B48CA /* OLOidc.framework */,
-			);
-			name = Products;
-			sourceTree = "<group>";
-		};
-		1B721ED92EBBB461000B48CA /* Frameworks */ = {
+		1B2BE8162EC18FC700168597 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
 		};
+		1B7467A02EC1F76B00FADDA1 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				1B7467A62EC1F76B00FADDA1 /* OLOidc.framework */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
 		1B96AE662EBBA949003A3A66 = {
 			isa = PBXGroup;
 			children = (
+				1B74679B2EC1F76B00FADDA1 /* OLOidc.xcodeproj */,
 				1B96AE712EBBA949003A3A66 /* Togu */,
-				1B721EC22EBBB439000B48CA /* OLOidc.xcodeproj */,
-				1B721ED92EBBB461000B48CA /* Frameworks */,
 				1B721EE12EBBC579000B48CA /* Togu.app */,
+				1B2BE8162EC18FC700168597 /* Frameworks */,
 			);
 			sourceTree = "<group>";
 		};
@@ -148,13 +148,15 @@
 			);
 			mainGroup = 1B96AE662EBBA949003A3A66;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 1B96AE662EBBA949003A3A66;
 			projectDirPath = "";
 			projectReferences = (
 				{
-					ProductGroup = 1B721EC52EBBB439000B48CA /* Products */;
-					ProjectRef = 1B721EC22EBBB439000B48CA /* OLOidc.xcodeproj */;
+					ProductGroup = 1B7467A02EC1F76B00FADDA1 /* Products */;
+					ProjectRef = 1B74679B2EC1F76B00FADDA1 /* OLOidc.xcodeproj */;
 				},
 			);
 			projectRoot = "";
@@ -165,11 +167,11 @@
 /* End PBXProject section */
 
 /* Begin PBXReferenceProxy section */
-		1B721ECE2EBBB439000B48CA /* OLOidc.framework */ = {
+		1B7467A62EC1F76B00FADDA1 /* OLOidc.framework */ = {
 			isa = PBXReferenceProxy;
 			fileType = wrapper.framework;
 			path = OLOidc.framework;
-			remoteRef = 1B721ECD2EBBB439000B48CA /* PBXContainerItemProxy */;
+			remoteRef = 1B7467A52EC1F76B00FADDA1 /* PBXContainerItemProxy */;
 			sourceTree = BUILT_PRODUCTS_DIR;
 		};
 /* End PBXReferenceProxy section */
@@ -229,6 +231,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = NKHQR6PTCD;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -252,6 +255,7 @@
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
@@ -291,6 +295,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = NKHQR6PTCD;
 				ENABLE_NS_ASSERTIONS = NO;
@@ -307,6 +312,7 @@
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 			};
 			name = Release;
@@ -320,6 +326,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = NKHQR6PTCD;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -369,6 +376,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = NKHQR6PTCD;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
